@@ -84,6 +84,22 @@ function formatCountdown(expiresTime?: number, nowSeconds?: number) {
   return `${minutes}:${String(rest).padStart(2, '0')}`
 }
 
+function PreviewImage({ src, className }: { src?: string; className: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+
+  if (!src || failedSrc === src) return null
+
+  return (
+    <img
+      src={src}
+      alt=''
+      loading='lazy'
+      className={className}
+      onError={() => setFailedSrc(src)}
+    />
+  )
+}
+
 export function PortraitAssets() {
   const [jobs, setJobs] = useState<PortraitAssetJob[]>([])
   const [loading, setLoading] = useState(true)
@@ -324,9 +340,8 @@ export function PortraitAssets() {
                           <TableCell>
                             <div className='flex items-center gap-2'>
                               {job.asset_preview && (
-                                <img
+                                <PreviewImage
                                   src={job.asset_preview}
-                                  alt=''
                                   className='bg-muted size-10 shrink-0 rounded-md border object-cover'
                                 />
                               )}
@@ -441,9 +456,8 @@ export function PortraitAssets() {
                 {confirmJob ? (
                   <div className='space-y-3'>
                     {confirmJob.asset_preview && (
-                      <img
+                      <PreviewImage
                         src={confirmJob.asset_preview}
-                        alt=''
                         className='bg-background aspect-square w-full rounded-md border object-cover'
                       />
                     )}

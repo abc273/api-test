@@ -5,12 +5,15 @@ const rpaSecret = env('PORTRAIT_RPA_SECRET')
 const profileDir = env('PORTRAIT_RPA_PROFILE_DIR', './.volc-portrait-profile')
 const headless = env('PORTRAIT_RPA_HEADLESS', 'false') === 'true'
 const intervalMs = Number(env('PORTRAIT_RPA_INTERVAL_MS', '15000'))
+const previewMaxSize = Number(env('PORTRAIT_RPA_PREVIEW_MAX_SIZE', '240'))
+const previewJpegQuality = Number(env('PORTRAIT_RPA_PREVIEW_JPEG_QUALITY', '0.72'))
 const chromeExecutablePath = env('VOLC_CHROME_EXECUTABLE_PATH')
 const chromeProfileDirectory = env('VOLC_CHROME_PROFILE_DIRECTORY')
 const chromeCDPURL = env('VOLC_CHROME_CDP_URL')
 const runOnce = env('PORTRAIT_RPA_ONCE', 'false') === 'true'
 const phase = env('PORTRAIT_RPA_PHASE', 'all')
 const createInviteEnabled = env('PORTRAIT_RPA_CREATE_INVITES', 'false') === 'true'
+const refreshPreviewsEnabled = env('PORTRAIT_RPA_REFRESH_PREVIEWS', 'false') === 'true'
 const entryUrl = env(
   'VOLC_PORTRAIT_ENTRY_URL',
   'https://console.volcengine.com/ark/region:ark+cn-beijing/experience/vision?modelId=doubao-seedance-2-0-260128&tab=GenVideo'
@@ -50,6 +53,118 @@ async function updateJob(jobId, patch) {
 async function listJobs(status, limit = 1) {
   const qs = new URLSearchParams({ status, limit: String(limit) })
   return api(`/api/portrait_assets/rpa/jobs?${qs}`)
+}
+
+function normalizeAssetID(assetID = '') {
+  return assetID.trim().replace(/^asset:\/\//, '').trim()
+}
+
+function isEmbeddedImage(value = '') {
+  return value.trim().startsWith('data:image/')
+}
+
+function isRemoteImage(value = '') {
+  return /^https?:\/\//i.test(value.trim())
+}
+
+function extractURLFromStyle(style = '') {
+  const match = style.match(/url\((['"]?)(.*?)\1\)/)
+  return match?.[2] || ''
+}
+
+function toAbsoluteURL(value = '', baseURL = '') {
+  const raw = value.trim()
+  if (!raw || raw.startsWith('data:image/')) return raw
+  try {
+    return new URL(raw, baseURL).toString()
+  } catch {
+    return raw
+  }
+}
+
+async function getPreviewURL(page, locator) {
+  const src = await locator.getAttribute('src').catch(() => '') || ''
+  const haveAvatar = await locator.getAttribute('haveavatar').catch(() => '') || ''
+  const style = await locator.getAttribute('style').catch(() => '') || ''
+  return toAbsoluteURL(src || haveAvatar || extractURLFromStyle(style), page.url())
+}
+
+async function fetchImageDataURL(url, referer = '') {
+  if (!url) return ''
+  if (isEmbeddedImage(url)) return url
+  if (!isRemoteImage(url)) return ''
+
+  const headers = {
+    Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+  }
+  if (referer) headers.Referer = referer
+
+  const res = await fetch(url, { headers }).catch(() => null)
+  if (!res?.ok) return ''
+  const contentType = (res.headers.get('content-type') || '').split(';')[0].trim()
+  if (!contentType.toLowerCase().startsWith('image/')) return ''
+  const buffer = Buffer.from(await res.arrayBuffer())
+  if (!buffer.length) return ''
+  return `data:${contentType};base64,${buffer.toString('base64')}`
+}
+
+async function compactImageDataURL(page, dataURL) {
+  if (!isEmbeddedImage(dataURL)) return dataURL
+  const maxSize = Number.isFinite(previewMaxSize) && previewMaxSize > 0 ? previewMaxSize : 240
+  const quality = Number.isFinite(previewJpegQuality) && previewJpegQuality > 0 && previewJpegQuality <= 1
+    ? previewJpegQuality
+    : 0.72
+
+  return page.evaluate(async ({ dataURL: source, maxSize: size, quality: jpegQuality }) => {
+    const image = new Image()
+    image.decoding = 'async'
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = reject
+      image.src = source
+    })
+    const sourceWidth = image.naturalWidth || image.width
+    const sourceHeight = image.naturalHeight || image.height
+    if (!sourceWidth || !sourceHeight) return source
+    const ratio = Math.min(1, size / Math.max(sourceWidth, sourceHeight))
+    const width = Math.max(1, Math.round(sourceWidth * ratio))
+    const height = Math.max(1, Math.round(sourceHeight * ratio))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#fff'
+    context.fillRect(0, 0, width, height)
+    context.drawImage(image, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', jpegQuality)
+  }, { dataURL, maxSize, quality }).catch(() => dataURL)
+}
+
+async function screenshotLocatorDataURL(page, locator) {
+  const imageBuffer = await locator.screenshot({
+    type: 'jpeg',
+    quality: 72,
+    timeout: 5000,
+  }).catch(() => null)
+  if (!imageBuffer) return ''
+  return compactImageDataURL(page, `data:image/jpeg;base64,${imageBuffer.toString('base64')}`)
+}
+
+async function readAssetPreview(page, assetRow) {
+  const preview = assetRow.locator('img, [haveavatar], [style*="background-image"]').first()
+  if (!(await preview.isVisible().catch(() => false))) return ''
+
+  const previewURL = await getPreviewURL(page, preview)
+  const fetchedPreview = await fetchImageDataURL(previewURL, page.url()).catch(() => '')
+  if (fetchedPreview) return compactImageDataURL(page, fetchedPreview)
+
+  const elementPreview = await screenshotLocatorDataURL(page, preview)
+  if (elementPreview) return elementPreview
+
+  const rowPreview = await screenshotLocatorDataURL(page, assetRow)
+  if (rowPreview) return rowPreview
+
+  return previewURL
 }
 
 async function clickByText(page, texts, timeout = 3000) {
@@ -324,15 +439,19 @@ async function openAssetDetailForJob(page) {
   return clickInRow(row, ['查看资产'])
 }
 
-async function findAssetDetailRow(page) {
+async function findAssetDetailRow(page, expectedAssetID = '') {
+  const normalizedExpectedAssetID = normalizeAssetID(expectedAssetID)
   const rows = page.locator('tr')
   const count = await rows.count().catch(() => 0)
+  let fallbackRow = null
   for (let i = 0; i < count; i += 1) {
     const row = rows.nth(i)
     const text = await row.innerText().catch(() => '')
-    if (/\basset[-_][A-Za-z0-9][A-Za-z0-9_-]{6,}\b/.test(text)) return row
+    if (!/\basset[-_][A-Za-z0-9][A-Za-z0-9_-]{6,}\b/.test(text)) continue
+    if (!fallbackRow) fallbackRow = row
+    if (normalizedExpectedAssetID && text.includes(normalizedExpectedAssetID)) return row
   }
-  return null
+  return fallbackRow
 }
 
 function parseAssetTimestamp(assetID) {
@@ -361,27 +480,13 @@ function isAssetInJobWindow(assetID, job) {
   return assetTime >= lowerBound && assetTime <= upperBound
 }
 
-async function readAssetDetail(page) {
-  const assetRow = await findAssetDetailRow(page)
+async function readAssetDetail(page, expectedAssetID = '') {
+  const assetRow = await findAssetDetailRow(page, expectedAssetID)
   if (!assetRow) {
     return { assetID: '', assetStatus: '', failureReason: '', assetPreview: '' }
   }
   const text = await assetRow.innerText().catch(() => '')
-  let assetPreview = ''
-  if (assetRow) {
-    const preview = assetRow.locator('img, [haveavatar], [style*="background-image"]').first()
-    if (await preview.isVisible().catch(() => false)) {
-      const imageBuffer = await preview.screenshot({ type: 'png' }).catch(() => null)
-      if (imageBuffer) {
-        assetPreview = `data:image/png;base64,${imageBuffer.toString('base64')}`
-      } else {
-        const previewURL = await preview.getAttribute('src').catch(() => '') ||
-          await preview.getAttribute('haveavatar').catch(() => '') ||
-          ''
-        assetPreview = previewURL
-      }
-    }
-  }
+  const assetPreview = await readAssetPreview(page, assetRow)
   const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
   const assetID = text.match(/\basset[-_][A-Za-z0-9][A-Za-z0-9_-]{6,}\b/)?.[0] || ''
   const statusValues = ['失败', '不通过', '不合规', '拒绝', '驳回', '可用', '正常', '成功', '通过', '审核中', '待审核', '处理中']
@@ -395,6 +500,29 @@ async function readAssetDetail(page) {
     : ''
 
   return { assetID, assetStatus, failureReason, assetPreview }
+}
+
+async function refreshAssetPreview(page, job) {
+  if (!normalizeAssetID(job.asset_id) || isEmbeddedImage(job.asset_preview || '')) return
+
+  await openPortraitAssetManager(page)
+  if (!(await openAssetDetailForJob(page))) return
+
+  await page.waitForTimeout(3000)
+  const detail = await readAssetDetail(page, job.asset_id)
+  if (
+    normalizeAssetID(detail.assetID) !== normalizeAssetID(job.asset_id) ||
+    !detail.assetPreview ||
+    !isEmbeddedImage(detail.assetPreview)
+  ) {
+    return
+  }
+
+  await updateJob(job.id, {
+    status: job.status,
+    asset_status: detail.assetStatus || job.asset_status || '',
+    asset_preview: detail.assetPreview,
+  })
 }
 
 async function acceptFinishedAsset(page, job) {
@@ -468,6 +596,16 @@ async function acceptFinishedAsset(page, job) {
 }
 
 async function processOnce(page) {
+  if (phase === 'refresh_preview' || (phase === 'all' && refreshPreviewsEnabled)) {
+    for (const status of ['pending_confirm', 'ready']) {
+      for (const job of await listJobs(status, 5)) {
+        if (!normalizeAssetID(job.asset_id) || !isRemoteImage(job.asset_preview || '')) continue
+        console.log(`[portrait-rpa] refresh preview for job ${job.id}`)
+        await refreshAssetPreview(page, job)
+      }
+    }
+  }
+
   if (phase === 'create_invite' || (phase === 'all' && createInviteEnabled)) {
     for (const job of await listJobs('pending', 1)) {
       console.log(`[portrait-rpa] create invite for job ${job.id}`)
