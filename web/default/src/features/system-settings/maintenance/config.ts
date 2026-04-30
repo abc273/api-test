@@ -42,6 +42,8 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     detail: true,
     token: true,
+    portrait_assets: true,
+    official_portrait_assets: true,
     log: true,
     midjourney: true,
     task: true,

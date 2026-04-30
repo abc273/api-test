@@ -27,6 +27,8 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     detail: true,
     token: true,
+    portrait_assets: true,
+    official_portrait_assets: true,
     log: true,
     midjourney: true,
     task: true,
@@ -56,6 +58,11 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
   '/keys': { section: 'console', module: 'token' },
+  '/portrait-assets': { section: 'console', module: 'portrait_assets' },
+  '/portrait-assets-official': {
+    section: 'console',
+    module: 'official_portrait_assets',
+  },
   '/usage-logs/common': { section: 'console', module: 'log' },
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
   '/usage-logs/task': { section: 'console', module: 'task' },
@@ -76,26 +83,32 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
 function parseSidebarConfig(
   value: string | null | undefined
 ): SidebarModulesAdminConfig {
+  const defaults = Object.entries(DEFAULT_SIDEBAR_MODULES).reduce(
+    (acc, [section, config]) => {
+      acc[section] = { ...config }
+      return acc
+    },
+    {} as SidebarModulesAdminConfig
+  )
+
   // If empty string, null, or undefined, use default config
   if (!value || value.trim() === '') {
-    return DEFAULT_SIDEBAR_MODULES
+    return defaults
   }
 
   try {
     const parsed = JSON.parse(value) as SidebarModulesAdminConfig
-    // Ensure chat section and its modules are correctly initialized if missing
-    if (!parsed.chat) {
-      parsed.chat = { enabled: true, playground: true, chat: true }
-    } else {
-      if (parsed.chat.enabled === undefined) parsed.chat.enabled = true
-      if (parsed.chat.playground === undefined) parsed.chat.playground = true
-      if (parsed.chat.chat === undefined) parsed.chat.chat = true
-    }
-    return parsed
+    return Object.entries(defaults).reduce((acc, [section, config]) => {
+      acc[section] = {
+        ...config,
+        ...(parsed[section] ?? {}),
+      }
+      return acc
+    }, {} as SidebarModulesAdminConfig)
   } catch {
     // eslint-disable-next-line no-console
     console.error('Failed to parse sidebar modules configuration')
-    return DEFAULT_SIDEBAR_MODULES
+    return defaults
   }
 }
 

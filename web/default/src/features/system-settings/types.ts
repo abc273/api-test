@@ -153,6 +153,11 @@ export type IntegrationSettings = {
   'monitor_setting.auto_test_channel_minutes': number
   'model_deployment.ionet.api_key': string
   'model_deployment.ionet.enabled': boolean
+  'portrait_asset.access_key': string
+  'portrait_asset.secret_key': string
+  'portrait_asset.project_name': string
+  'portrait_asset.region': string
+  'portrait_asset.callback_base_url': string
   PayAddress: string
   EpayId: string
   EpayKey: string

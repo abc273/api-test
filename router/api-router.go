@@ -274,6 +274,16 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.POST("/jobs/:id/reject", middleware.UserAuth(), controller.RejectPortraitAsset)
 			portraitAssetRoute.GET("/rpa/jobs", controller.ListPortraitAssetJobsForRPA)
 			portraitAssetRoute.PUT("/rpa/jobs/:id", controller.UpdatePortraitAssetJobFromRPA)
+			portraitAssetRoute.GET("/official/config", middleware.UserAuth(), controller.GetOfficialPortraitAssetConfig)
+			portraitAssetRoute.GET("/official/jobs", middleware.UserAuth(), controller.ListOfficialPortraitAssetJobs)
+			portraitAssetRoute.POST("/official/jobs", middleware.UserAuth(), controller.CreateOfficialPortraitAssetJob)
+			portraitAssetRoute.POST("/official/jobs/:id/validation", middleware.UserAuth(), controller.RefreshOfficialPortraitValidation)
+			portraitAssetRoute.POST("/official/jobs/:id/asset", middleware.UserAuth(), controller.SubmitOfficialPortraitAsset)
+			portraitAssetRoute.POST("/official/jobs/:id/sync", middleware.UserAuth(), controller.SyncOfficialPortraitAssetJob)
+			portraitAssetRoute.POST("/official/jobs/:id/confirm", middleware.UserAuth(), controller.ConfirmOfficialPortraitAsset)
+			portraitAssetRoute.POST("/official/jobs/:id/reject", middleware.UserAuth(), controller.RejectOfficialPortraitAsset)
+			portraitAssetRoute.GET("/official/callback/:id/:state", controller.OfficialPortraitAssetCallback)
+			portraitAssetRoute.GET("/official/callback", controller.OfficialPortraitAssetCallback)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

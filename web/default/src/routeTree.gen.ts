@@ -40,6 +40,7 @@ import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPortraitAssetsIndexRouteImport } from './routes/_authenticated/portrait-assets/index'
+import { Route as AuthenticatedPortraitAssetsOfficialIndexRouteImport } from './routes/_authenticated/portrait-assets-official/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
@@ -227,6 +228,12 @@ const AuthenticatedPortraitAssetsIndexRoute =
     path: '/portrait-assets/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPortraitAssetsOfficialIndexRoute =
+  AuthenticatedPortraitAssetsOfficialIndexRouteImport.update({
+    id: '/portrait-assets-official/',
+    path: '/portrait-assets-official/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPlaygroundIndexRoute =
   AuthenticatedPlaygroundIndexRouteImport.update({
     id: '/playground/',
@@ -407,6 +414,7 @@ export interface FileRoutesByFullPath {
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
+  '/portrait-assets-official/': typeof AuthenticatedPortraitAssetsOfficialIndexRoute
   '/portrait-assets/': typeof AuthenticatedPortraitAssetsIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -462,6 +470,7 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
+  '/portrait-assets-official': typeof AuthenticatedPortraitAssetsOfficialIndexRoute
   '/portrait-assets': typeof AuthenticatedPortraitAssetsIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -521,6 +530,7 @@ export interface FileRoutesById {
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
+  '/_authenticated/portrait-assets-official/': typeof AuthenticatedPortraitAssetsOfficialIndexRoute
   '/_authenticated/portrait-assets/': typeof AuthenticatedPortraitAssetsIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -579,6 +589,7 @@ export interface FileRouteTypes {
     | '/keys/'
     | '/models/'
     | '/playground/'
+    | '/portrait-assets-official/'
     | '/portrait-assets/'
     | '/profile/'
     | '/redemption-codes/'
@@ -634,6 +645,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/models'
     | '/playground'
+    | '/portrait-assets-official'
     | '/portrait-assets'
     | '/profile'
     | '/redemption-codes'
@@ -692,6 +704,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
+    | '/_authenticated/portrait-assets-official/'
     | '/_authenticated/portrait-assets/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
@@ -952,6 +965,13 @@ declare module '@tanstack/react-router' {
       path: '/portrait-assets'
       fullPath: '/portrait-assets/'
       preLoaderRoute: typeof AuthenticatedPortraitAssetsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/portrait-assets-official/': {
+      id: '/_authenticated/portrait-assets-official/'
+      path: '/portrait-assets-official'
+      fullPath: '/portrait-assets-official/'
+      preLoaderRoute: typeof AuthenticatedPortraitAssetsOfficialIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/playground/': {
@@ -1226,6 +1246,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
+  AuthenticatedPortraitAssetsOfficialIndexRoute: typeof AuthenticatedPortraitAssetsOfficialIndexRoute
   AuthenticatedPortraitAssetsIndexRoute: typeof AuthenticatedPortraitAssetsIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
@@ -1249,6 +1270,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
+  AuthenticatedPortraitAssetsOfficialIndexRoute:
+    AuthenticatedPortraitAssetsOfficialIndexRoute,
   AuthenticatedPortraitAssetsIndexRoute: AuthenticatedPortraitAssetsIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:

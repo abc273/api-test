@@ -78,6 +78,14 @@ export function SidebarModulesSection({
         title: t('Token management'),
         description: t('Create, revoke, and audit API tokens.'),
       },
+      portrait_assets: {
+        title: t('Portrait Assets'),
+        description: t('Show or hide RPA portrait asset tasks.'),
+      },
+      official_portrait_assets: {
+        title: t('Official Portrait Assets'),
+        description: t('Show or hide official portrait asset creation.'),
+      },
       log: {
         title: t('Usage logs'),
         description: t('Detailed request logs for investigations.'),

@@ -4,6 +4,7 @@ import { EmailSettingsSection } from './email-settings-section'
 import { IoNetDeploymentSettingsSection } from './ionet-deployment-settings-section'
 import { MonitoringSettingsSection } from './monitoring-settings-section'
 import { PaymentSettingsSection } from './payment-settings-section'
+import { VolcPortraitAssetSettingsSection } from './volc-portrait-asset-settings-section'
 import { WorkerSettingsSection } from './worker-settings-section'
 
 const INTEGRATIONS_SECTIONS = [
@@ -111,6 +112,22 @@ const INTEGRATIONS_SECTIONS = [
         defaultValues={{
           enabled: settings['model_deployment.ionet.enabled'],
           apiKey: settings['model_deployment.ionet.api_key'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'volc-portrait-assets',
+    titleKey: 'VolcEngine Portrait Assets',
+    descriptionKey: 'Configure official portrait asset API credentials',
+    build: (settings: IntegrationSettings) => (
+      <VolcPortraitAssetSettingsSection
+        defaultValues={{
+          accessKey: settings['portrait_asset.access_key'],
+          secretKey: settings['portrait_asset.secret_key'],
+          projectName: settings['portrait_asset.project_name'],
+          region: settings['portrait_asset.region'],
+          callbackBaseURL: settings['portrait_asset.callback_base_url'],
         }}
       />
     ),

@@ -68,8 +68,13 @@ export function useSidebarData(): SidebarData {
             icon: Key,
           },
           {
-            title: '真人资产',
+            title: t('Portrait Assets'),
             url: '/portrait-assets',
+            icon: UserCheck,
+          },
+          {
+            title: t('Official Portrait Assets'),
+            url: '/portrait-assets-official',
             icon: UserCheck,
           },
           {
