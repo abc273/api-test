@@ -269,6 +269,9 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.GET("/", middleware.UserAuth(), controller.ListPortraitAssetJobs)
 			portraitAssetRoute.POST("/jobs", middleware.UserAuth(), controller.CreatePortraitAssetJob)
 			portraitAssetRoute.GET("/jobs/:id", middleware.UserAuth(), controller.GetPortraitAssetJob)
+			portraitAssetRoute.POST("/jobs/:id/accept", middleware.UserAuth(), controller.RequestPortraitAssetAccept)
+			portraitAssetRoute.POST("/jobs/:id/confirm", middleware.UserAuth(), controller.ConfirmPortraitAsset)
+			portraitAssetRoute.POST("/jobs/:id/reject", middleware.UserAuth(), controller.RejectPortraitAsset)
 			portraitAssetRoute.GET("/rpa/jobs", controller.ListPortraitAssetJobsForRPA)
 			portraitAssetRoute.PUT("/rpa/jobs/:id", controller.UpdatePortraitAssetJobFromRPA)
 		}

@@ -24,6 +24,8 @@ type portraitAssetRPAUpdateRequest struct {
 	QRImage      string `json:"qr_image"`
 	VolcGroupID  string `json:"volc_group_id"`
 	AssetID      string `json:"asset_id"`
+	AssetStatus  string `json:"asset_status"`
+	AssetPreview string `json:"asset_preview"`
 	ErrorMessage string `json:"error_message"`
 }
 
@@ -54,7 +56,11 @@ func CreatePortraitAssetJob(c *gin.Context) {
 	}
 	job, err := model.CreatePortraitAssetJob(c.GetInt("id"), req.Name)
 	if err != nil {
-		common.ApiError(c, err)
+		if errors.Is(err, model.ErrPortraitAssetActiveJob) {
+			common.ApiErrorMsg(c, "你已有进行中的真人资产任务，请完成后再创建")
+		} else {
+			common.ApiError(c, err)
+		}
 		return
 	}
 	common.ApiSuccess(c, job)
@@ -69,6 +75,62 @@ func GetPortraitAssetJob(c *gin.Context) {
 	job, err := model.GetUserPortraitAssetJobByID(c.GetInt("id"), id)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, job)
+}
+
+func RequestPortraitAssetAccept(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	job, err := model.RequestUserPortraitAssetAccept(c.GetInt("id"), id)
+	if err != nil {
+		if errors.Is(err, model.ErrPortraitAssetQRCodeExpired) {
+			common.ApiErrorMsg(c, "二维码已超时，请重新排队")
+		} else if errors.Is(err, model.ErrPortraitAssetNotReady) {
+			common.ApiErrorMsg(c, "请先等待二维码生成，或确认授权素材已上传完成")
+		} else {
+			common.ApiError(c, err)
+		}
+		return
+	}
+	common.ApiSuccess(c, job)
+}
+
+func ConfirmPortraitAsset(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	job, err := model.ConfirmUserPortraitAsset(c.GetInt("id"), id)
+	if err != nil {
+		if errors.Is(err, model.ErrPortraitAssetNotReady) {
+			common.ApiErrorMsg(c, "请先等待资产审核通过并确认缩略图")
+		} else {
+			common.ApiError(c, err)
+		}
+		return
+	}
+	common.ApiSuccess(c, job)
+}
+
+func RejectPortraitAsset(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	job, err := model.RejectUserPortraitAsset(c.GetInt("id"), id)
+	if err != nil {
+		if errors.Is(err, model.ErrPortraitAssetNotReady) {
+			common.ApiErrorMsg(c, "当前资产不需要确认")
+		} else {
+			common.ApiError(c, err)
+		}
 		return
 	}
 	common.ApiSuccess(c, job)
@@ -148,6 +210,12 @@ func UpdatePortraitAssetJobFromRPA(c *gin.Context) {
 	if req.AssetID != "" {
 		job.AssetID = model.NormalizePortraitAssetID(req.AssetID)
 	}
+	if req.AssetStatus != "" {
+		job.AssetStatus = strings.TrimSpace(req.AssetStatus)
+	}
+	if req.AssetPreview != "" {
+		job.AssetPreview = strings.TrimSpace(req.AssetPreview)
+	}
 	if req.ErrorMessage != "" {
 		job.ErrorMessage = strings.TrimSpace(req.ErrorMessage)
 	} else if req.Status != "" && strings.TrimSpace(req.Status) != model.PortraitAssetStatusFailed {
@@ -156,7 +224,7 @@ func UpdatePortraitAssetJobFromRPA(c *gin.Context) {
 	if job.Status == "" {
 		job.Status = model.PortraitAssetStatusPending
 	}
-	if job.AssetID != "" && job.Status != model.PortraitAssetStatusFailed && job.Status != model.PortraitAssetStatusDisabled {
+	if job.AssetID != "" && req.Status == "" && job.Status != model.PortraitAssetStatusFailed && job.Status != model.PortraitAssetStatusDisabled {
 		job.Status = model.PortraitAssetStatusReady
 	}
 	if err := model.UpdatePortraitAssetJobFromRPA(&job); err != nil {

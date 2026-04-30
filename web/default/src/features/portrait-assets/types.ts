@@ -3,9 +3,11 @@ export type PortraitAssetStatus =
   | 'qr_ready'
   | 'waiting_upload'
   | 'waiting_accept'
+  | 'pending_confirm'
   | 'ready'
   | 'failed'
   | 'disabled'
+  | 'expired'
 
 export interface PortraitAssetJob {
   id: number
@@ -16,10 +18,15 @@ export interface PortraitAssetJob {
   qr_image?: string
   volc_group_id?: string
   asset_id?: string
+  asset_status?: string
+  asset_preview?: string
   error_message?: string
   created_time: number
   updated_time: number
+  accept_time?: number
+  qr_expires_time?: number
   ready_time?: number
+  queue_position?: number
 }
 
 export interface PortraitAssetPage {

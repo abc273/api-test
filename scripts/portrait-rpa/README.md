@@ -4,7 +4,11 @@
 
 - 拉取 `pending` 任务并在火山控制台创建资产组邀约二维码
 - 把二维码回写到 New API，用户在「真人资产」页面扫码
-- 拉取 `waiting_accept` 任务并尝试在火山控制台接收授权、回写 `Asset ID`
+- 用户扫码/链接上传完成后，在「真人资产」页面点击接收授权
+- worker 拉取 `waiting_accept` 任务，按用户点击后的最新授权资产进入「查看资产」
+- worker 回写火山资产状态、缩略图；资产可用时进入用户确认，资产失败时回写失败原因
+
+默认按公共二维码队列模式运行：`pending` 表示用户排队中，worker 不会自动为每个用户创建新二维码。管理员需要刷新公共二维码时，再显式运行 `PORTRAIT_RPA_PHASE=create_invite`。
 
 ## 环境变量
 
@@ -23,6 +27,7 @@ export PORTRAIT_RPA_HEADLESS=false
 export PORTRAIT_RPA_INTERVAL_MS=15000
 export PORTRAIT_RPA_ONCE=false
 export PORTRAIT_RPA_PHASE=all
+export PORTRAIT_RPA_CREATE_INVITES=false
 export VOLC_PORTRAIT_ENTRY_URL='https://console.volcengine.com/ark/region:ark+cn-beijing/experience/vision?modelId=doubao-seedance-2-0-260128&tab=GenVideo'
 export VOLC_CHROME_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 export VOLC_CHROME_PROFILE_DIRECTORY=Default
@@ -34,6 +39,13 @@ export VOLC_CHROME_CDP_URL=http://127.0.0.1:9222
 ```bash
 export PORTRAIT_RPA_ONCE=true
 export PORTRAIT_RPA_PHASE=create_invite
+```
+
+只测试授权接收时，可以设置：
+
+```bash
+export PORTRAIT_RPA_ONCE=true
+export PORTRAIT_RPA_PHASE=accept_asset
 ```
 
 火山控制台页面如果调整了 DOM，可以覆盖这些选择器：
