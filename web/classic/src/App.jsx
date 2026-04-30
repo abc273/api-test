@@ -65,7 +65,7 @@ function App() {
   const location = useLocation();
   const [statusState] = useContext(StatusContext);
 
-  // 获取模型广场权限配置
+  // 获取模型广场权限配置1
   const pricingRequireAuth = useMemo(() => {
     const headerNavModulesConfig = statusState?.status?.HeaderNavModules;
     if (headerNavModulesConfig) {
