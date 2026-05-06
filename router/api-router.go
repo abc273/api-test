@@ -278,6 +278,7 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.GET("/official/jobs", middleware.UserAuth(), controller.ListOfficialPortraitAssetJobs)
 			portraitAssetRoute.POST("/official/jobs", middleware.UserAuth(), controller.CreateOfficialPortraitAssetJob)
 			portraitAssetRoute.POST("/official/jobs/:id/validation", middleware.UserAuth(), controller.RefreshOfficialPortraitValidation)
+			portraitAssetRoute.POST("/official/upload", middleware.UserAuth(), controller.UploadOfficialPortraitAssetMaterial)
 			portraitAssetRoute.POST("/official/jobs/:id/asset", middleware.UserAuth(), controller.SubmitOfficialPortraitAsset)
 			portraitAssetRoute.POST("/official/jobs/:id/sync", middleware.UserAuth(), controller.SyncOfficialPortraitAssetJob)
 			portraitAssetRoute.POST("/official/jobs/:id/confirm", middleware.UserAuth(), controller.ConfirmOfficialPortraitAsset)

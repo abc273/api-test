@@ -43,6 +43,14 @@ export interface OfficialPortraitAssetConfig {
   project_name: string
 }
 
+export interface OfficialPortraitAssetUploadResult {
+  url: string
+  file_name: string
+  content_type: string
+  asset_type: 'Image' | 'Video' | 'Audio'
+  size: number
+}
+
 export interface ApiResponse<T> {
   success: boolean
   message?: string

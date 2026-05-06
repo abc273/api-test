@@ -3,6 +3,7 @@ package router
 import (
 	"embed"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -25,6 +26,12 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
 	classicFS := common.EmbedFolder(assets.ClassicBuildFS, "web/classic/dist")
 	themeFS := common.NewThemeAwareFS(defaultFS, classicFS)
+	uploadRoot := common.GetPortraitAssetUploadRoot()
+	if err := os.MkdirAll(uploadRoot, 0o755); err != nil {
+		common.SysError("failed to prepare portrait asset upload directory: " + err.Error())
+	} else {
+		router.StaticFS(common.PortraitAssetUploadRoutePrefix, gin.Dir(uploadRoot, false))
+	}
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())

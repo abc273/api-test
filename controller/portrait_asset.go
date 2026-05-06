@@ -1,19 +1,26 @@
 package controller
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -31,6 +38,14 @@ type portraitAssetOfficialAssetRequest struct {
 	Name      string `json:"name"`
 }
 
+type portraitAssetOfficialUploadResponse struct {
+	URL         string `json:"url"`
+	FileName    string `json:"file_name"`
+	ContentType string `json:"content_type"`
+	AssetType   string `json:"asset_type"`
+	Size        int64  `json:"size"`
+}
+
 type portraitAssetRPAUpdateRequest struct {
 	Status       string `json:"status"`
 	InviteURL    string `json:"invite_url"`
@@ -40,6 +55,51 @@ type portraitAssetRPAUpdateRequest struct {
 	AssetStatus  string `json:"asset_status"`
 	AssetPreview string `json:"asset_preview"`
 	ErrorMessage string `json:"error_message"`
+}
+
+type officialPortraitUploadFormat struct {
+	AssetType   string
+	ContentType string
+	Ext         string
+}
+
+const officialPortraitUploadMaxBytes int64 = 100 << 20
+
+var officialPortraitUploadFormatsByExt = map[string]officialPortraitUploadFormat{
+	".jpg":  {AssetType: "Image", ContentType: "image/jpeg", Ext: ".jpg"},
+	".jpeg": {AssetType: "Image", ContentType: "image/jpeg", Ext: ".jpeg"},
+	".png":  {AssetType: "Image", ContentType: "image/png", Ext: ".png"},
+	".webp": {AssetType: "Image", ContentType: "image/webp", Ext: ".webp"},
+	".gif":  {AssetType: "Image", ContentType: "image/gif", Ext: ".gif"},
+	".bmp":  {AssetType: "Image", ContentType: "image/bmp", Ext: ".bmp"},
+	".mp4":  {AssetType: "Video", ContentType: "video/mp4", Ext: ".mp4"},
+	".mov":  {AssetType: "Video", ContentType: "video/quicktime", Ext: ".mov"},
+	".webm": {AssetType: "Video", ContentType: "video/webm", Ext: ".webm"},
+	".mp3":  {AssetType: "Audio", ContentType: "audio/mpeg", Ext: ".mp3"},
+	".wav":  {AssetType: "Audio", ContentType: "audio/wav", Ext: ".wav"},
+	".m4a":  {AssetType: "Audio", ContentType: "audio/mp4", Ext: ".m4a"},
+	".ogg":  {AssetType: "Audio", ContentType: "audio/ogg", Ext: ".ogg"},
+	".aac":  {AssetType: "Audio", ContentType: "audio/aac", Ext: ".aac"},
+	".flac": {AssetType: "Audio", ContentType: "audio/flac", Ext: ".flac"},
+}
+
+var officialPortraitUploadFormatsByContentType = map[string]officialPortraitUploadFormat{
+	"image/jpeg":      {AssetType: "Image", ContentType: "image/jpeg", Ext: ".jpg"},
+	"image/png":       {AssetType: "Image", ContentType: "image/png", Ext: ".png"},
+	"image/webp":      {AssetType: "Image", ContentType: "image/webp", Ext: ".webp"},
+	"image/gif":       {AssetType: "Image", ContentType: "image/gif", Ext: ".gif"},
+	"image/bmp":       {AssetType: "Image", ContentType: "image/bmp", Ext: ".bmp"},
+	"video/mp4":       {AssetType: "Video", ContentType: "video/mp4", Ext: ".mp4"},
+	"video/webm":      {AssetType: "Video", ContentType: "video/webm", Ext: ".webm"},
+	"video/quicktime": {AssetType: "Video", ContentType: "video/quicktime", Ext: ".mov"},
+	"audio/mpeg":      {AssetType: "Audio", ContentType: "audio/mpeg", Ext: ".mp3"},
+	"audio/wav":       {AssetType: "Audio", ContentType: "audio/wav", Ext: ".wav"},
+	"audio/x-wav":     {AssetType: "Audio", ContentType: "audio/wav", Ext: ".wav"},
+	"audio/wave":      {AssetType: "Audio", ContentType: "audio/wav", Ext: ".wav"},
+	"audio/mp4":       {AssetType: "Audio", ContentType: "audio/mp4", Ext: ".m4a"},
+	"audio/aac":       {AssetType: "Audio", ContentType: "audio/aac", Ext: ".aac"},
+	"audio/ogg":       {AssetType: "Audio", ContentType: "audio/ogg", Ext: ".ogg"},
+	"audio/flac":      {AssetType: "Audio", ContentType: "audio/flac", Ext: ".flac"},
 }
 
 func ListPortraitAssetJobs(c *gin.Context) {
@@ -228,6 +288,90 @@ func RefreshOfficialPortraitValidation(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, job)
+}
+
+func UploadOfficialPortraitAssetMaterial(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, officialPortraitUploadMaxBytes)
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			common.ApiErrorMsg(c, "上传素材不能超过 100 MB")
+			return
+		}
+		common.ApiErrorMsg(c, "请选择要上传的素材文件")
+		return
+	}
+	if fileHeader.Size <= 0 {
+		common.ApiErrorMsg(c, "上传文件不能为空")
+		return
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	defer src.Close()
+
+	head := make([]byte, 512)
+	n, err := io.ReadFull(src, head)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		common.ApiError(c, err)
+		return
+	}
+	head = head[:n]
+
+	detectedContentType := strings.TrimSpace(http.DetectContentType(head))
+	declaredContentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	format, err := resolveOfficialPortraitUploadFormat(fileHeader.Filename, detectedContentType, declaredContentType)
+	if err != nil {
+		common.ApiErrorMsg(c, "仅支持上传图片、视频或音频素材")
+		return
+	}
+
+	reader := io.Reader(src)
+	if seeker, ok := src.(io.Seeker); ok {
+		if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		reader = src
+	} else {
+		reader = io.MultiReader(bytes.NewReader(head), src)
+	}
+
+	dateDir := time.Now().UTC().Format("20060102")
+	fileName := uuid.NewString() + format.Ext
+	uploadRoot := common.GetPortraitAssetUploadRoot()
+	saveDir := filepath.Join(uploadRoot, dateDir)
+	if err := os.MkdirAll(saveDir, 0o755); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	dstPath := filepath.Join(saveDir, fileName)
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, reader); err != nil {
+		_ = os.Remove(dstPath)
+		common.ApiError(c, err)
+		return
+	}
+
+	publicPath := path.Join(common.PortraitAssetUploadRoutePrefix, dateDir, fileName)
+	common.ApiSuccess(c, portraitAssetOfficialUploadResponse{
+		URL:         buildPublicURL(c, publicPath),
+		FileName:    strings.TrimSpace(fileHeader.Filename),
+		ContentType: format.ContentType,
+		AssetType:   format.AssetType,
+		Size:        fileHeader.Size,
+	})
 }
 
 func SubmitOfficialPortraitAsset(c *gin.Context) {
@@ -422,22 +566,7 @@ func syncOfficialPortraitAssetJob(job *model.PortraitAssetJob) error {
 }
 
 func buildOfficialPortraitCallbackURL(c *gin.Context, job *model.PortraitAssetJob) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(service.GetVolcPortraitCallbackBaseURL()), "/")
-	if baseURL == "" {
-		proto := c.GetHeader("X-Forwarded-Proto")
-		if proto == "" {
-			if c.Request.TLS != nil {
-				proto = "https"
-			} else {
-				proto = "http"
-			}
-		}
-		host := c.GetHeader("X-Forwarded-Host")
-		if host == "" {
-			host = c.Request.Host
-		}
-		baseURL = proto + "://" + host
-	}
+	baseURL := getPortraitAssetPublicBaseURL(c)
 	state := officialPortraitAssetState(job)
 	return fmt.Sprintf(
 		"%s/api/portrait_assets/official/callback/%s/%s",
@@ -449,6 +578,64 @@ func buildOfficialPortraitCallbackURL(c *gin.Context, job *model.PortraitAssetJo
 
 func officialPortraitAssetState(job *model.PortraitAssetJob) string {
 	return common.GenerateHMAC(fmt.Sprintf("portrait-official:%d:%d:%d", job.Id, job.UserId, job.CreatedTime))
+}
+
+func getPortraitAssetPublicBaseURL(c *gin.Context) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(service.GetVolcPortraitCallbackBaseURL()), "/")
+	if baseURL != "" {
+		return baseURL
+	}
+	proto := c.GetHeader("X-Forwarded-Proto")
+	if proto == "" {
+		if c.Request.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	return proto + "://" + host
+}
+
+func buildPublicURL(c *gin.Context, routePath string) string {
+	return strings.TrimRight(getPortraitAssetPublicBaseURL(c), "/") + "/" + strings.TrimLeft(routePath, "/")
+}
+
+func resolveOfficialPortraitUploadFormat(filename string, detectedContentType string, declaredContentType string) (officialPortraitUploadFormat, error) {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	detectedContentType = strings.ToLower(strings.TrimSpace(detectedContentType))
+	declaredContentType = strings.ToLower(strings.TrimSpace(declaredContentType))
+
+	if format, ok := officialPortraitUploadFormatsByContentType[detectedContentType]; ok {
+		if extFormat, extOk := officialPortraitUploadFormatsByExt[ext]; extOk && extFormat.AssetType == format.AssetType {
+			format.Ext = extFormat.Ext
+		}
+		return format, nil
+	}
+	if format, ok := officialPortraitUploadFormatsByContentType[declaredContentType]; ok {
+		if extFormat, extOk := officialPortraitUploadFormatsByExt[ext]; extOk && extFormat.AssetType == format.AssetType {
+			format.Ext = extFormat.Ext
+		}
+		return format, nil
+	}
+	if format, ok := officialPortraitUploadFormatsByExt[ext]; ok {
+		if declaredContentType != "" && declaredContentType != "application/octet-stream" {
+			mediaType, _, err := mime.ParseMediaType(declaredContentType)
+			if err == nil {
+				declaredContentType = strings.ToLower(strings.TrimSpace(mediaType))
+			}
+		}
+		if detectedContentType == "" || detectedContentType == "application/octet-stream" || strings.HasPrefix(detectedContentType, strings.ToLower(strings.Split(format.ContentType, "/")[0])+"/") {
+			return format, nil
+		}
+		if declaredContentType == "" || declaredContentType == "application/octet-stream" || strings.HasPrefix(declaredContentType, strings.ToLower(strings.Split(format.ContentType, "/")[0])+"/") {
+			return format, nil
+		}
+	}
+	return officialPortraitUploadFormat{}, errors.New("unsupported official portrait upload type")
 }
 
 func isPublicHTTPURL(value string) bool {

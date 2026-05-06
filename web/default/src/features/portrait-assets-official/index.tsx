@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Clipboard,
@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Send,
   ShieldAlert,
+  Upload,
   UserCheck,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -45,6 +46,7 @@ import {
   rejectOfficialPortraitAsset,
   submitOfficialPortraitAsset,
   syncOfficialPortraitAssetJob,
+  uploadOfficialPortraitAssetMaterial,
 } from './api'
 import type {
   OfficialPortraitAssetConfig,
@@ -83,6 +85,13 @@ function formatCountdown(expiresTime?: number, nowSeconds?: number) {
   return `${minutes}:${String(rest).padStart(2, '0')}`
 }
 
+function stripFileExtension(fileName: string) {
+  const trimmed = fileName.trim()
+  const dotIndex = trimmed.lastIndexOf('.')
+  if (dotIndex <= 0) return trimmed
+  return trimmed.slice(0, dotIndex)
+}
+
 function PreviewImage({ src, className }: { src?: string; className: string }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
@@ -107,6 +116,7 @@ export function OfficialPortraitAssets() {
   const [creating, setCreating] = useState(false)
   const [refreshingId, setRefreshingId] = useState<number | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [confirmingId, setConfirmingId] = useState<number | null>(null)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
@@ -117,6 +127,7 @@ export function OfficialPortraitAssets() {
   const [assetUrl, setAssetUrl] = useState('')
   const [assetName, setAssetName] = useState('')
   const [assetType, setAssetType] = useState('Image')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const statusLabels = useMemo<Record<OfficialPortraitAssetStatus, string>>(
     () => ({
@@ -259,6 +270,27 @@ export function OfficialPortraitAssets() {
       }
     } finally {
       setSubmittingId(null)
+    }
+  }
+
+  async function handleUploadFile(file?: File | null) {
+    if (!file) return
+    try {
+      setUploading(true)
+      const res = await uploadOfficialPortraitAssetMaterial(file)
+      if (res.success && res.data) {
+        setAssetUrl(res.data.url)
+        setAssetType(res.data.asset_type)
+        setAssetName((current) => current || stripFileExtension(file.name))
+        toast.success(t('Material uploaded'))
+      } else {
+        toast.error(res.message || t('Upload failed'))
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('Upload failed'))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -544,11 +576,35 @@ export function OfficialPortraitAssets() {
                     <Badge variant={statusVariant(activeJob.status)}>
                       {statusLabels[activeJob.status]}
                     </Badge>
-                    <Input
-                      value={assetUrl}
-                      onChange={(event) => setAssetUrl(event.target.value)}
-                      placeholder={t('Public material URL')}
-                    />
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                      <Input
+                        value={assetUrl}
+                        onChange={(event) => setAssetUrl(event.target.value)}
+                        placeholder={t('Public material URL')}
+                      />
+                      <input
+                        ref={fileInputRef}
+                        type='file'
+                        accept='image/*,video/*,audio/*'
+                        className='hidden'
+                        onChange={(event) =>
+                          void handleUploadFile(event.target.files?.[0] || null)
+                        }
+                      />
+                      <Button
+                        type='button'
+                        variant='outline'
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploading ? (
+                          <Loader2 className='animate-spin' />
+                        ) : (
+                          <Upload />
+                        )}
+                        {t('Upload')}
+                      </Button>
+                    </div>
                     <Input
                       value={assetName}
                       onChange={(event) => setAssetName(event.target.value)}

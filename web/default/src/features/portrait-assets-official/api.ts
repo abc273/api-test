@@ -4,6 +4,7 @@ import type {
   OfficialPortraitAssetConfig,
   OfficialPortraitAssetJob,
   OfficialPortraitAssetPage,
+  OfficialPortraitAssetUploadResult,
 } from './types'
 
 export async function getOfficialPortraitAssetConfig(): Promise<
@@ -45,6 +46,15 @@ export async function submitOfficialPortraitAsset(
     `/api/portrait_assets/official/jobs/${id}/asset`,
     payload
   )
+  return res.data
+}
+
+export async function uploadOfficialPortraitAssetMaterial(
+  file: File
+): Promise<ApiResponse<OfficialPortraitAssetUploadResult>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post('/api/portrait_assets/official/upload', formData)
   return res.data
 }
 
