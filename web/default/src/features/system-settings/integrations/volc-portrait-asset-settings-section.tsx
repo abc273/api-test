@@ -124,7 +124,7 @@ export function VolcPortraitAssetSettingsSection({
     <SettingsSection
       title={t('VolcEngine Portrait Assets')}
       description={t(
-        'Configure VolcEngine credentials for official portrait asset creation.'
+        'Configure VolcEngine credentials for official and virtual portrait asset creation.'
       )}
     >
       <Form {...form}>
@@ -137,7 +137,7 @@ export function VolcPortraitAssetSettingsSection({
             <AlertTitle>{t('Used by ordinary users')}</AlertTitle>
             <AlertDescription>
               {t(
-                'After these server-side credentials are configured, ordinary users can create official portrait assets without seeing the AK/SK.'
+                'After these server-side credentials are configured, ordinary users can create official and virtual portrait assets without seeing the AK/SK.'
               )}
             </AlertDescription>
           </Alert>
@@ -196,7 +196,11 @@ export function VolcPortraitAssetSettingsSection({
                 <FormItem>
                   <FormLabel>{t('VolcEngine Project Name')}</FormLabel>
                   <FormControl>
-                    <Input placeholder='default' autoComplete='off' {...field} />
+                    <Input
+                      placeholder='default'
+                      autoComplete='off'
+                      {...field}
+                    />
                   </FormControl>
                   <FormDescription>
                     {t(

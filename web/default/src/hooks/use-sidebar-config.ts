@@ -28,6 +28,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     detail: true,
     token: true,
     portrait_assets: true,
+    virtual_portrait_assets: true,
     official_portrait_assets: true,
     log: true,
     midjourney: true,
@@ -59,6 +60,10 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/dashboard/models': { section: 'console', module: 'detail' },
   '/keys': { section: 'console', module: 'token' },
   '/portrait-assets': { section: 'console', module: 'portrait_assets' },
+  '/portrait-assets-virtual': {
+    section: 'console',
+    module: 'virtual_portrait_assets',
+  },
   '/portrait-assets-official': {
     section: 'console',
     module: 'official_portrait_assets',

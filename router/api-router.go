@@ -283,8 +283,16 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.POST("/official/jobs/:id/sync", middleware.UserAuth(), controller.SyncOfficialPortraitAssetJob)
 			portraitAssetRoute.POST("/official/jobs/:id/confirm", middleware.UserAuth(), controller.ConfirmOfficialPortraitAsset)
 			portraitAssetRoute.POST("/official/jobs/:id/reject", middleware.UserAuth(), controller.RejectOfficialPortraitAsset)
+			portraitAssetRoute.GET("/official/jobs/:id/preview/:state", controller.OfficialPortraitAssetPreview)
 			portraitAssetRoute.GET("/official/callback/:id/:state", controller.OfficialPortraitAssetCallback)
 			portraitAssetRoute.GET("/official/callback", controller.OfficialPortraitAssetCallback)
+			portraitAssetRoute.GET("/virtual/config", middleware.UserAuth(), controller.GetVirtualPortraitAssetConfig)
+			portraitAssetRoute.GET("/virtual/group", middleware.UserAuth(), controller.GetUserVirtualPortraitAssetGroup)
+			portraitAssetRoute.GET("/virtual/assets", middleware.UserAuth(), controller.ListUserVirtualPortraitAssets)
+			portraitAssetRoute.GET("/virtual/assets/:id/preview/:state", controller.UserVirtualPortraitAssetPreview)
+			portraitAssetRoute.POST("/virtual/upload", middleware.UserAuth(), controller.UploadVirtualPortraitAssetMaterial)
+			portraitAssetRoute.POST("/virtual/assets", middleware.UserAuth(), controller.CreateUserVirtualPortraitAsset)
+			portraitAssetRoute.POST("/virtual/assets/:id/sync", middleware.UserAuth(), controller.SyncUserVirtualPortraitAsset)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

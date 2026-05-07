@@ -224,6 +224,7 @@ func ListOfficialPortraitAssetJobs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	decorateOfficialPortraitAssetJobsResponse(c, jobs)
 	total, _ := model.CountUserOfficialPortraitAssetJobs(userId)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(jobs)
@@ -259,6 +260,7 @@ func CreateOfficialPortraitAssetJob(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
 }
 
@@ -287,10 +289,15 @@ func RefreshOfficialPortraitValidation(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
 }
 
 func UploadOfficialPortraitAssetMaterial(c *gin.Context) {
+	uploadPortraitAssetMaterial(c)
+}
+
+func uploadPortraitAssetMaterial(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, officialPortraitUploadMaxBytes)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -417,6 +424,7 @@ func SubmitOfficialPortraitAsset(c *gin.Context) {
 		return
 	}
 	_ = syncOfficialPortraitAssetJob(job)
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
 }
 
@@ -435,6 +443,7 @@ func SyncOfficialPortraitAssetJob(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
 }
 
@@ -453,6 +462,7 @@ func ConfirmOfficialPortraitAsset(c *gin.Context) {
 		}
 		return
 	}
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
 }
 
@@ -471,7 +481,35 @@ func RejectOfficialPortraitAsset(c *gin.Context) {
 		}
 		return
 	}
+	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
+}
+
+func OfficialPortraitAssetPreview(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.String(http.StatusBadRequest, "invalid portrait asset job id")
+		return
+	}
+	job, err := model.GetOfficialPortraitAssetJobByID(id)
+	if err != nil {
+		c.String(http.StatusNotFound, "portrait asset job not found")
+		return
+	}
+	if c.Param("state") != officialPortraitAssetPreviewState(job) {
+		c.String(http.StatusUnauthorized, "invalid portrait asset preview state")
+		return
+	}
+
+	previewURL, err := resolveOfficialPortraitPreviewURL(job)
+	if err != nil {
+		c.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	c.Header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate")
+	c.Header("Pragma", "no-cache")
+	c.Redirect(http.StatusFound, previewURL)
 }
 
 func OfficialPortraitAssetCallback(c *gin.Context) {
@@ -565,6 +603,45 @@ func syncOfficialPortraitAssetJob(job *model.PortraitAssetJob) error {
 	return nil
 }
 
+func decorateOfficialPortraitAssetJobsResponse(c *gin.Context, jobs []*model.PortraitAssetJob) {
+	for _, job := range jobs {
+		decorateOfficialPortraitAssetJobResponse(c, job)
+	}
+}
+
+func decorateOfficialPortraitAssetJobResponse(c *gin.Context, job *model.PortraitAssetJob) {
+	if job == nil {
+		return
+	}
+	if previewURL := buildOfficialPortraitPreviewURL(c, job); previewURL != "" {
+		job.AssetPreview = previewURL
+	}
+}
+
+func resolveOfficialPortraitPreviewURL(job *model.PortraitAssetJob) (string, error) {
+	if job == nil {
+		return "", errors.New("portrait asset job is nil")
+	}
+
+	previewURL := ""
+	if model.NormalizePortraitAssetID(job.AssetID) != "" {
+		asset, err := service.GetVolcPortraitAsset(job.AssetID, job.ProjectName)
+		if err != nil {
+			common.SysError(fmt.Sprintf("failed to refresh official portrait asset preview for job %d: %v", job.Id, err))
+		} else {
+			previewURL = strings.TrimSpace(asset.URL)
+		}
+	}
+	previewURL = firstNonEmpty(previewURL, job.AssetPreview, job.AssetURL)
+	if previewURL == "" {
+		return "", errors.New("portrait asset preview not found")
+	}
+	if !isPublicHTTPURL(previewURL) {
+		return "", errors.New("portrait asset preview url is invalid")
+	}
+	return previewURL, nil
+}
+
 func buildOfficialPortraitCallbackURL(c *gin.Context, job *model.PortraitAssetJob) string {
 	baseURL := getPortraitAssetPublicBaseURL(c)
 	state := officialPortraitAssetState(job)
@@ -576,8 +653,28 @@ func buildOfficialPortraitCallbackURL(c *gin.Context, job *model.PortraitAssetJo
 	)
 }
 
+func buildOfficialPortraitPreviewURL(c *gin.Context, job *model.PortraitAssetJob) string {
+	if job == nil {
+		return ""
+	}
+	if model.NormalizePortraitAssetID(job.AssetID) == "" &&
+		strings.TrimSpace(job.AssetPreview) == "" &&
+		strings.TrimSpace(job.AssetURL) == "" {
+		return ""
+	}
+	return buildPublicURL(c, fmt.Sprintf(
+		"/api/portrait_assets/official/jobs/%d/preview/%s",
+		job.Id,
+		officialPortraitAssetPreviewState(job),
+	))
+}
+
 func officialPortraitAssetState(job *model.PortraitAssetJob) string {
 	return common.GenerateHMAC(fmt.Sprintf("portrait-official:%d:%d:%d", job.Id, job.UserId, job.CreatedTime))
+}
+
+func officialPortraitAssetPreviewState(job *model.PortraitAssetJob) string {
+	return common.GenerateHMAC(fmt.Sprintf("portrait-official-preview:%d:%d:%d", job.Id, job.UserId, job.CreatedTime))
 }
 
 func getPortraitAssetPublicBaseURL(c *gin.Context) string {

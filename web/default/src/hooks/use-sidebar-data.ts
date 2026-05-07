@@ -13,6 +13,7 @@ import {
   MessageSquare,
   CreditCard,
   UserCheck,
+  Image,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
@@ -71,6 +72,11 @@ export function useSidebarData(): SidebarData {
             title: t('Portrait Assets'),
             url: '/portrait-assets',
             icon: UserCheck,
+          },
+          {
+            title: t('Virtual Portrait Assets'),
+            url: '/portrait-assets-virtual',
+            icon: Image,
           },
           {
             title: t('Official Portrait Assets'),
