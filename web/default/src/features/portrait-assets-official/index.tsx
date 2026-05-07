@@ -77,14 +77,6 @@ function assetUri(assetId?: string) {
   return assetId.startsWith('asset://') ? assetId : `asset://${assetId}`
 }
 
-function formatCountdown(expiresTime?: number, nowSeconds?: number) {
-  if (!expiresTime || !nowSeconds) return ''
-  const seconds = Math.max(0, expiresTime - nowSeconds)
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  return `${minutes}:${String(rest).padStart(2, '0')}`
-}
-
 function stripFileExtension(fileName: string) {
   const trimmed = fileName.trim()
   const dotIndex = trimmed.lastIndexOf('.')
@@ -120,9 +112,6 @@ export function OfficialPortraitAssets() {
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [confirmingId, setConfirmingId] = useState<number | null>(null)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
-  const [nowSeconds, setNowSeconds] = useState(() =>
-    Math.floor(Date.now() / 1000)
-  )
   const [name, setName] = useState('')
   const [assetUrl, setAssetUrl] = useState('')
   const [assetName, setAssetName] = useState('')
@@ -148,20 +137,16 @@ export function OfficialPortraitAssets() {
     () => jobs.find((job) => activeStatuses.includes(job.status)),
     [jobs]
   )
-  const activeJobId = activeJob?.id
-  const activeJobStatus = activeJob?.status
 
   const readyJobs = useMemo(
     () => jobs.filter((job) => job.status === 'ready' && job.asset_id),
     [jobs]
   )
 
-  const validationCountdown = formatCountdown(
+  const validationExpiresAt =
     activeJob?.status === 'validate_ready'
-      ? activeJob.qr_expires_time
-      : undefined,
-    nowSeconds
-  )
+      ? formatTimestampToDate(activeJob.qr_expires_time)
+      : ''
 
   const fetchData = useCallback(async () => {
     try {
@@ -182,28 +167,6 @@ export function OfficialPortraitAssets() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNowSeconds(Math.floor(Date.now() / 1000))
-    }, 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    if (!activeJobId || !activeJobStatus) return
-    const timer = window.setInterval(() => {
-      if (
-        activeJobStatus === 'asset_processing' ||
-        activeJobStatus === 'validate_ready'
-      ) {
-        void syncOfficialPortraitAssetJob(activeJobId).finally(fetchData)
-        return
-      }
-      void fetchData()
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [activeJobId, activeJobStatus, fetchData])
 
   async function handleCreate() {
     try {
@@ -540,9 +503,9 @@ export function OfficialPortraitAssets() {
                       <Badge variant={statusVariant(activeJob.status)}>
                         {statusLabels[activeJob.status]}
                       </Badge>
-                      {validationCountdown && (
+                      {validationExpiresAt && (
                         <span className='text-muted-foreground text-xs'>
-                          {validationCountdown}
+                          {validationExpiresAt}
                         </span>
                       )}
                     </div>
