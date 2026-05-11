@@ -173,6 +173,13 @@ export type IntegrationSettings = {
   StripeUnitPrice: number
   StripeMinTopUp: number
   StripePromotionCodesEnabled: boolean
+  AlipayEnabled: boolean
+  AlipayAppId: string
+  AlipayPrivateKey: string
+  AlipayPublicKey: string
+  AlipaySandbox: boolean
+  AlipayReturnUrl: string
+  AlipaySubscriptionReturnUrl: string
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

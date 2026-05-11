@@ -130,22 +130,31 @@ export function SubscriptionPurchaseDialog(props: Props) {
         payment_method: selectedEpayMethod,
       })
       if (res.message === 'success' && res.url) {
-        const form = document.createElement('form')
-        form.action = res.url
-        form.method = 'POST'
-        if (!isSafari) {
-          form.target = '_blank'
+        const hasFormParams =
+          !!res.data &&
+          typeof res.data === 'object' &&
+          Object.keys(res.data).length > 0
+
+        if (hasFormParams) {
+          const form = document.createElement('form')
+          form.action = res.url
+          form.method = 'POST'
+          if (!isSafari) {
+            form.target = '_blank'
+          }
+          Object.entries(res.data || {}).forEach(([key, value]) => {
+            const input = document.createElement('input')
+            input.type = 'hidden'
+            input.name = key
+            input.value = String(value)
+            form.appendChild(input)
+          })
+          document.body.appendChild(form)
+          form.submit()
+          document.body.removeChild(form)
+        } else {
+          window.open(res.url, '_blank')
         }
-        Object.entries(res.data || {}).forEach(([key, value]) => {
-          const input = document.createElement('input')
-          input.type = 'hidden'
-          input.name = key
-          input.value = String(value)
-          form.appendChild(input)
-        })
-        document.body.appendChild(form)
-        form.submit()
-        document.body.removeChild(form)
         toast.success(t('Payment initiated'))
         props.onOpenChange(false)
       } else {

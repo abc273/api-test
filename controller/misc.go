@@ -93,6 +93,11 @@ func GetStatus(c *gin.Context) {
 		"usd_exchange_rate": operation_setting.USDExchangeRate,
 		"price":             operation_setting.Price,
 		"stripe_unit_price": setting.StripeUnitPrice,
+		"enable_online_topup": func() bool {
+			return isEpayTopUpEnabled() || isAlipayTopUpEnabled()
+		}(),
+		"enable_stripe_topup": isStripeTopUpEnabled(),
+		"enable_creem_topup":  isCreemTopUpEnabled(),
 
 		// 面板启用开关
 		"api_info_enabled":      cs.ApiInfoEnabled,

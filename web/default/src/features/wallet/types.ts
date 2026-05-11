@@ -17,7 +17,7 @@ export interface ApiResponse<T = unknown> {
 export type TopupInfoResponse = ApiResponse<TopupInfo>
 export type RedemptionResponse = ApiResponse<number>
 export type AmountResponse = ApiResponse<string>
-export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
+export type PaymentResponse = ApiResponse<Record<string, unknown> | null> & {
   url?: string
 }
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
@@ -101,6 +101,8 @@ export interface TopupInfo {
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
   enable_stripe_topup: boolean
+  /** Whether direct Alipay topup is enabled */
+  enable_alipay_topup?: boolean
   /** Available payment methods */
   pay_methods: PaymentMethod[]
   /** Minimum topup amount for online topup */

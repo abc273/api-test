@@ -38,6 +38,14 @@ const PAYMENT_TEMPLATES = [
     },
   },
   {
+    name: 'Alipay Direct',
+    template: {
+      color: '#1677FF',
+      name: '支付宝直连',
+      type: 'alipay_direct',
+    },
+  },
+  {
     name: 'WeChat Pay',
     template: {
       color: 'rgba(var(--semi-green-5), 1)',

@@ -24,76 +24,56 @@ import (
 
 func GetTopUpInfo(c *gin.Context) {
 	// 获取支付方式
-	payMethods := operation_setting.PayMethods
+	payMethods := clonePayMethods(operation_setting.PayMethods)
+
+	enableOnlineTopUp := isEpayTopUpEnabled()
+	enableAlipayTopUp := isAlipayTopUpEnabled()
+
+	if enableAlipayTopUp {
+		payMethods = appendPayMethodIfMissing(payMethods, map[string]string{
+			"name":      "支付宝",
+			"type":      model.PaymentMethodAlipayDirect,
+			"color":     "#1677FF",
+			"min_topup": strconv.FormatInt(getMinTopup(), 10),
+		})
+	}
 
 	// 如果启用了 Stripe 支付，添加到支付方法列表
 	if isStripeTopUpEnabled() {
-		// 检查是否已经包含 Stripe
-		hasStripe := false
-		for _, method := range payMethods {
-			if method["type"] == "stripe" {
-				hasStripe = true
-				break
-			}
-		}
-
-		if !hasStripe {
-			stripeMethod := map[string]string{
-				"name":      "Stripe",
-				"type":      "stripe",
-				"color":     "rgba(var(--semi-purple-5), 1)",
-				"min_topup": strconv.Itoa(setting.StripeMinTopUp),
-			}
-			payMethods = append(payMethods, stripeMethod)
-		}
+		payMethods = appendPayMethodIfMissing(payMethods, map[string]string{
+			"name":      "Stripe",
+			"type":      "stripe",
+			"color":     "rgba(var(--semi-purple-5), 1)",
+			"min_topup": strconv.Itoa(setting.StripeMinTopUp),
+		})
 	}
 
 	// 如果启用了 Waffo 支付，添加到支付方法列表
 	enableWaffo := isWaffoTopUpEnabled()
 	if enableWaffo {
-		hasWaffo := false
-		for _, method := range payMethods {
-			if method["type"] == model.PaymentMethodWaffo {
-				hasWaffo = true
-				break
-			}
-		}
-
-		if !hasWaffo {
-			waffoMethod := map[string]string{
-				"name":      "Waffo (Global Payment)",
-				"type":      model.PaymentMethodWaffo,
-				"color":     "rgba(var(--semi-blue-5), 1)",
-				"min_topup": strconv.Itoa(setting.WaffoMinTopUp),
-			}
-			payMethods = append(payMethods, waffoMethod)
-		}
+		payMethods = appendPayMethodIfMissing(payMethods, map[string]string{
+			"name":      "Waffo (Global Payment)",
+			"type":      model.PaymentMethodWaffo,
+			"color":     "rgba(var(--semi-blue-5), 1)",
+			"min_topup": strconv.Itoa(setting.WaffoMinTopUp),
+		})
 	}
 
 	enableWaffoPancake := isWaffoPancakeTopUpEnabled()
 	if enableWaffoPancake {
-		hasWaffoPancake := false
-		for _, method := range payMethods {
-			if method["type"] == model.PaymentMethodWaffoPancake {
-				hasWaffoPancake = true
-				break
-			}
-		}
-
-		if !hasWaffoPancake {
-			payMethods = append(payMethods, map[string]string{
-				"name":      "Waffo Pancake",
-				"type":      model.PaymentMethodWaffoPancake,
-				"color":     "rgba(var(--semi-orange-5), 1)",
-				"min_topup": strconv.Itoa(setting.WaffoPancakeMinTopUp),
-			})
-		}
+		payMethods = appendPayMethodIfMissing(payMethods, map[string]string{
+			"name":      "Waffo Pancake",
+			"type":      model.PaymentMethodWaffoPancake,
+			"color":     "rgba(var(--semi-orange-5), 1)",
+			"min_topup": strconv.Itoa(setting.WaffoPancakeMinTopUp),
+		})
 	}
 
 	data := gin.H{
-		"enable_online_topup":        isEpayTopUpEnabled(),
+		"enable_online_topup":        enableOnlineTopUp || enableAlipayTopUp,
 		"enable_stripe_topup":        isStripeTopUpEnabled(),
 		"enable_creem_topup":         isCreemTopUpEnabled(),
+		"enable_alipay_topup":        enableAlipayTopUp,
 		"enable_waffo_topup":         enableWaffo,
 		"enable_waffo_pancake_topup": enableWaffoPancake,
 		"waffo_pay_methods": func() interface{} {
@@ -112,6 +92,32 @@ func GetTopUpInfo(c *gin.Context) {
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 	}
 	common.ApiSuccess(c, data)
+}
+
+func clonePayMethods(payMethods []map[string]string) []map[string]string {
+	cloned := make([]map[string]string, 0, len(payMethods))
+	for _, method := range payMethods {
+		methodCopy := make(map[string]string, len(method))
+		for key, value := range method {
+			methodCopy[key] = value
+		}
+		cloned = append(cloned, methodCopy)
+	}
+	return cloned
+}
+
+func appendPayMethodIfMissing(payMethods []map[string]string, method map[string]string) []map[string]string {
+	methodType := method["type"]
+	for _, existing := range payMethods {
+		if existing["type"] == methodType {
+			return payMethods
+		}
+	}
+	methodCopy := make(map[string]string, len(method))
+	for key, value := range method {
+		methodCopy[key] = value
+	}
+	return append(payMethods, methodCopy)
 }
 
 type EpayRequest struct {
@@ -186,6 +192,11 @@ func RequestEpay(c *gin.Context) {
 	}
 	if req.Amount < getMinTopup() {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getMinTopup())})
+		return
+	}
+
+	if req.PaymentMethod == model.PaymentMethodAlipayDirect {
+		RequestAlipayPay(c, &req)
 		return
 	}
 

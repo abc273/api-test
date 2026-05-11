@@ -29,6 +29,11 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		return
 	}
 
+	if req.PaymentMethod == model.PaymentMethodAlipayDirect {
+		SubscriptionRequestAlipayPay(c, &req)
+		return
+	}
+
 	plan, err := model.GetSubscriptionPlanById(req.PlanId)
 	if err != nil {
 		common.ApiError(c, err)

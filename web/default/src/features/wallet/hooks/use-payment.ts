@@ -89,10 +89,18 @@ export function usePayment() {
         }
 
         // Handle non-Stripe payment
-        if (!isStripe && response.data) {
+        if (!isStripe) {
           const url = (response as unknown as { url?: string }).url
           if (url) {
-            submitPaymentForm(url, response.data)
+            if (
+              response.data &&
+              typeof response.data === 'object' &&
+              Object.keys(response.data).length > 0
+            ) {
+              submitPaymentForm(url, response.data)
+            } else {
+              window.open(url, '_blank')
+            }
             toast.success(i18next.t('Redirecting to payment page...'))
             return true
           }

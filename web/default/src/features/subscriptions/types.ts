@@ -78,7 +78,7 @@ export interface SubscriptionPayResponse {
   data?: {
     pay_link?: string
     checkout_url?: string
-  }
+  } | null
   url?: string
 }
 

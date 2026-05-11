@@ -50,6 +50,12 @@ function getEpayMethods(payMethods = []) {
 
 // 提交易支付表单
 function submitEpayForm({ url, params }) {
+  const hasFormParams =
+    !!params && typeof params === 'object' && Object.keys(params).length > 0;
+  if (!hasFormParams) {
+    window.open(url, '_blank');
+    return;
+  }
   const form = document.createElement('form');
   form.action = url;
   form.method = 'POST';
@@ -181,7 +187,9 @@ const SubscriptionPlansCard = ({
         payment_method: selectedEpayMethod,
       });
       if (res.data?.message === 'success') {
-        submitEpayForm({ url: res.data.url, params: res.data.data });
+        if (res.data.url) {
+          submitEpayForm({ url: res.data.url, params: res.data.data });
+        }
         showSuccess(t('已发起支付'));
         closeBuy();
       } else {

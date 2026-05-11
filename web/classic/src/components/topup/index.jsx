@@ -296,28 +296,35 @@ const TopUp = () => {
             // Stripe 支付回调处理
             window.open(data.pay_link, '_blank');
           } else {
-            // 普通支付表单提交
-            let params = data;
             let url = res.data.url;
-            let form = document.createElement('form');
-            form.action = url;
-            form.method = 'POST';
-            let isSafari =
-              navigator.userAgent.indexOf('Safari') > -1 &&
-              navigator.userAgent.indexOf('Chrome') < 1;
-            if (!isSafari) {
-              form.target = '_blank';
+            const hasFormParams =
+              !!data &&
+              typeof data === 'object' &&
+              Object.keys(data).length > 0;
+            if (hasFormParams) {
+              let params = data;
+              let form = document.createElement('form');
+              form.action = url;
+              form.method = 'POST';
+              let isSafari =
+                navigator.userAgent.indexOf('Safari') > -1 &&
+                navigator.userAgent.indexOf('Chrome') < 1;
+              if (!isSafari) {
+                form.target = '_blank';
+              }
+              for (let key in params) {
+                let input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = params[key];
+                form.appendChild(input);
+              }
+              document.body.appendChild(form);
+              form.submit();
+              document.body.removeChild(form);
+            } else if (url) {
+              window.open(url, '_blank');
             }
-            for (let key in params) {
-              let input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = key;
-              input.value = params[key];
-              form.appendChild(input);
-            }
-            document.body.appendChild(form);
-            form.submit();
-            document.body.removeChild(form);
           }
         } else {
           const errorMsg =
@@ -613,7 +620,10 @@ const TopUp = () => {
               }
 
               if (!method.color) {
-                if (method.type === 'alipay') {
+                if (
+                  method.type === 'alipay' ||
+                  method.type === 'alipay_direct'
+                ) {
                   method.color = 'rgba(var(--semi-blue-5), 1)';
                 } else if (method.type === 'wxpay') {
                   method.color = 'rgba(var(--semi-green-5), 1)';

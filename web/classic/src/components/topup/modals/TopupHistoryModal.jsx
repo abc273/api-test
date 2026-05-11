@@ -53,6 +53,7 @@ const PAYMENT_METHOD_MAP = {
   creem: 'Creem',
   waffo: 'Waffo',
   alipay: '支付宝',
+  alipay_direct: '支付宝',
   wxpay: '微信',
 };
 
