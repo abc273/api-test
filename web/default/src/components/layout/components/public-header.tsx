@@ -16,6 +16,7 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
 import { HeaderLogo } from './header-logo'
+import { NodeBadge } from './node-badge'
 
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
@@ -116,9 +117,16 @@ export function PublicHeader(props: PublicHeaderProps) {
                   />
                 )}
               </div>
-              <span className='text-sm font-semibold tracking-tight'>
-                {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
-              </span>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm font-semibold tracking-tight'>
+                  {loading ? (
+                    <Skeleton className='h-4 w-16' />
+                  ) : (
+                    displaySiteName
+                  )}
+                </span>
+                {!loading && <NodeBadge />}
+              </div>
             </Link>
 
             {/* Desktop nav */}

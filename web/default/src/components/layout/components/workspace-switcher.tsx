@@ -22,6 +22,7 @@ import {
 import { useWorkspace } from '../context/workspace-context'
 import { getWorkspaceByPath, WORKSPACE_IDS } from '../lib/workspace-registry'
 import { type Workspace } from '../types'
+import { NodeBadge } from './node-badge'
 
 type WorkspaceSwitcherProps = {
   workspaces: Workspace[]
@@ -143,9 +144,14 @@ export function WorkspaceSwitcher({
                 </div>
               )}
               <div className='grid flex-1 text-start text-sm leading-tight group-data-[collapsible=icon]:hidden'>
-                <span className='truncate font-semibold'>
-                  {activeWorkspace.name}
-                </span>
+                <div className='flex items-center gap-2'>
+                  <span className='truncate font-semibold'>
+                    {activeWorkspace.name}
+                  </span>
+                  {activeWorkspace.id === WORKSPACE_IDS.DEFAULT ? (
+                    <NodeBadge className='shrink-0' />
+                  ) : null}
+                </div>
                 <span className='truncate text-xs'>{activeWorkspace.plan}</span>
               </div>
               <ChevronsUpDown className='ms-auto group-data-[collapsible=icon]:hidden' />
