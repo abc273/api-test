@@ -11,7 +11,7 @@ import {
 const defaultGeneralSettings: GeneralSettings = {
   'theme.frontend': 'default',
   Notice: '',
-  SystemName: 'New API',
+  SystemName: '八两API',
   Logo: '',
   Footer: '',
   About: '',

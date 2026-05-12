@@ -38,7 +38,7 @@ type WorkspaceSwitcherProps = {
  */
 export function WorkspaceSwitcher({
   workspaces,
-  defaultName = 'New API',
+  defaultName = '八两 API',
   defaultVersion,
 }: WorkspaceSwitcherProps) {
   const { t } = useTranslation()

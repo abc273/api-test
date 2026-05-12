@@ -60,7 +60,7 @@ export function Footer(props: FooterProps) {
   } = useSystemConfig()
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
-  const displayName = systemName || props.name || 'New API'
+  const displayName = systemName || props.name || '八两 API'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 
@@ -192,7 +192,7 @@ export function Footer(props: FooterProps) {
               rel='noopener noreferrer'
               className='text-primary text-xs font-medium hover:underline'
             >
-              {t('New API')}
+              {t('八两 API')}
             </a>
           </div>
         </div>

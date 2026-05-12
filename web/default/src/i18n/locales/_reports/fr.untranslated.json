@@ -1,4 +1,9 @@
 {
+  "Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.": "Custom API base URL. For official channels, 八两API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.",
+  "Format: AccessKey|SecretKey (or just ApiKey if upstream is New API)": "Format: AccessKey|SecretKey (or just ApiKey if upstream is 八两API)",
+  "If connecting to upstream One API or 八两API relay projects, use OpenAI type instead unless you know what you are doing": "If connecting to upstream One API or 八两API relay projects, use OpenAI type instead unless you know what you are doing",
+  "Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.": "Warning: Base URL should not end with /v1. 八两API will handle it automatically. This may cause request failures.",
+  "Welcome to our New API...": "Welcome to our 八两API...",
   "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.": "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.",
   "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).": "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).",
   "The exact input price depends on the matched output tier, such as resolution or whether video input is included.": "The exact input price depends on the matched output tier, such as resolution or whether video input is included."

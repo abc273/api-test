@@ -76,6 +76,24 @@ export const useSystemConfigStore = create<SystemConfigState>()(
     }),
     {
       name: 'system-config-storage',
+      version: 1,
+      migrate: (persistedState, version) => {
+        if (version === 0) {
+          const state = persistedState as {
+            config: SystemConfig
+            loadedLogoUrl: string
+          }
+          if (state.config.systemName === 'New API') {
+            state.config.systemName = DEFAULT_SYSTEM_NAME
+          }
+          return {
+            ...state,
+            config: state.config,
+            loadedLogoUrl: state.loadedLogoUrl,
+          }
+        }
+        return persistedState
+      },
       partialize: (state) => ({
         config: state.config,
         loadedLogoUrl: state.loadedLogoUrl,

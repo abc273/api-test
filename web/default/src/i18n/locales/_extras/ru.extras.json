@@ -1,0 +1,7 @@
+{
+  "translation.Custom API base URL. For official channels, 八两API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.": "Пользовательский базовый URL API. Для официальных каналов 八两API имеет встроенные адреса. Заполняйте это поле только для сторонних прокси-сайтов или специальных конечных точек. Не добавляйте /v1 или завершающий слэш.",
+  "translation.e.g. 八两API Console": "e.g. 八两API Console",
+  "translation.Format: AccessKey|SecretKey (or just ApiKey if upstream is 八两API)": "Format: AccessKey|SecretKey (or just ApiKey if upstream is 八两API)",
+  "translation.Warning: Base URL should not end with /v1. 八两API will handle it automatically. This may cause request failures.": "Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.",
+  "translation.Welcome to our 八两API...": "Welcome to our 八两API..."
+}
