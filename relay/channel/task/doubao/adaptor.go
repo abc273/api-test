@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -135,6 +136,11 @@ func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, req *http.Request, _ *r
 
 // EstimateBilling 检测请求 metadata 中是否包含视频输入，返回视频折扣 OtherRatio。
 func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
+	// output_tier_price 已经把视频输入维度编码进分档单价里，
+	// 这里跳过旧的 video_input 折扣，避免重复叠乘。
+	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeOutputTierPrice {
+		return nil
+	}
 	req, err := relaycommon.GetTaskRequest(c)
 	if err != nil {
 		return nil

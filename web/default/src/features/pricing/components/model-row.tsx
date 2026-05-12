@@ -11,8 +11,12 @@ import {
   SOURCE_TIME,
 } from '../lib/billing-expr'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '../lib/price'
+import { hasOutputTierPricing, isTokenBasedModel } from '../lib/model-helpers'
+import {
+  formatOutputTierPriceRange,
+  formatPrice,
+  formatRequestPrice,
+} from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 
 export interface ModelRowProps {
@@ -110,6 +114,7 @@ export const ModelRow = memo(function ModelRow(props: ModelRowProps) {
 
   const isDynamicPricing =
     model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
+  const isOutputTierPricing = hasOutputTierPricing(model)
   const dynamicHints = useMemo(
     () => (isDynamicPricing ? summarizeTieredExpr(model.billing_expr) : null),
     [isDynamicPricing, model.billing_expr]
@@ -180,6 +185,14 @@ export const ModelRow = memo(function ModelRow(props: ModelRowProps) {
                 )}
               </>
             )}
+            {isOutputTierPricing && (
+              <>
+                <span className='text-muted-foreground/30'>·</span>
+                <span className='rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'>
+                  {t('Output-tier pricing')}
+                </span>
+              </>
+            )}
           </div>
 
           {model.description && (
@@ -210,45 +223,65 @@ export const ModelRow = memo(function ModelRow(props: ModelRowProps) {
         <div className='shrink-0 text-right'>
           {isTokenBased ? (
             <div className='grid gap-0.5'>
-              <PriceLabel
-                label={t('Input')}
-                value={formatPrice(
-                  model,
-                  'input',
-                  tokenUnit,
-                  showRechargePrice,
-                  priceRate,
-                  usdExchangeRate
-                )}
-              />
-              {hasCachedPrice && (
-                <PriceLabel
-                  label={t('Cached')}
-                  value={formatPrice(
-                    model,
-                    'cache',
-                    tokenUnit,
-                    showRechargePrice,
-                    priceRate,
-                    usdExchangeRate
+              {isOutputTierPricing ? (
+                <>
+                  <PriceLabel
+                    label={t('Tiered input')}
+                    value={formatOutputTierPriceRange(
+                      model.output_tier_pricing,
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )}
+                  />
+                  <span className='text-muted-foreground/40 text-[10px]'>
+                    / {tokenUnitLabel} {t('input tokens')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <PriceLabel
+                    label={t('Input')}
+                    value={formatPrice(
+                      model,
+                      'input',
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )}
+                  />
+                  {hasCachedPrice && (
+                    <PriceLabel
+                      label={t('Cached')}
+                      value={formatPrice(
+                        model,
+                        'cache',
+                        tokenUnit,
+                        showRechargePrice,
+                        priceRate,
+                        usdExchangeRate
+                      )}
+                      muted
+                    />
                   )}
-                  muted
-                />
+                  <PriceLabel
+                    label={t('Output')}
+                    value={formatPrice(
+                      model,
+                      'output',
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )}
+                  />
+                  <span className='text-muted-foreground/40 text-[10px]'>
+                    / {tokenUnitLabel} tokens
+                  </span>
+                </>
               )}
-              <PriceLabel
-                label={t('Output')}
-                value={formatPrice(
-                  model,
-                  'output',
-                  tokenUnit,
-                  showRechargePrice,
-                  priceRate,
-                  usdExchangeRate
-                )}
-              />
-              <span className='text-muted-foreground/40 text-[10px]'>
-                / {tokenUnitLabel} tokens
-              </span>
             </div>
           ) : (
             <div>

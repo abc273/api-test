@@ -86,5 +86,20 @@
   "whsec_xxx": "whsec_xxx",
   "Xinference": "Xinference",
   "Xunfei": "Xunfei",
-  "Zhipu V4": "Zhipu V4"
+  "Zhipu V4": "Zhipu V4",
+  "Tiered input pricing": "Tiered input pricing",
+  "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.": "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.",
+  "Excluded": "Excluded",
+  "Tiered input price (by output type)": "Tiered input price (by output type)",
+  "Output tiers": "Output tiers",
+  "Tiered input price": "Tiered input price",
+  "Output tier input pricing": "Output tier input pricing",
+  "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).": "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).",
+  "Output-tier pricing": "Output-tier pricing",
+  "input tokens": "input tokens",
+  "Tiered input": "Tiered input",
+  "The exact input price depends on the matched output tier, such as resolution or whether video input is included.": "The exact input price depends on the matched output tier, such as resolution or whether video input is included.",
+  "Output Tier Pricing": "Output Tier Pricing",
+  "Tier {{index}}": "Tier {{index}}",
+  "Group ratios shown below are applied on top of these tier prices.": "Group ratios shown below are applied on top of these tier prices."
 }

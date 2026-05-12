@@ -3768,6 +3768,21 @@
     "Your Turnstile site key": "您的 Turnstile 站点密钥",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Tiered input pricing": "按输出类型分档输入价",
+    "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.": "按不同输出类型匹配不同输入单价。价格沿用当前按令牌计费模式，单位为每 1M tokens 的美元价格。",
+    "Excluded": "排除",
+    "Tiered input price (by output type)": "按输出类型分档输入价",
+    "Output tiers": "输出分档",
+    "Tiered input price": "分档输入价",
+    "Output tier input pricing": "输出分档输入价",
+    "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).": "模型到分档列表的 JSON 映射。每个档位可按分辨率和是否含视频输入匹配，并设置按令牌计费的输入价格（USD / 1M tokens）。",
+    "Output-tier pricing": "输出分档定价",
+    "input tokens": "输入 tokens",
+    "Tiered input": "分档输入",
+    "The exact input price depends on the matched output tier, such as resolution or whether video input is included.": "实际输入单价取决于命中的输出分档，例如分辨率或是否包含视频输入。",
+    "Output Tier Pricing": "输出分档定价",
+    "Tier {{index}}": "第 {{index}} 档",
+    "Group ratios shown below are applied on top of these tier prices.": "下方展示的分组倍率会叠加到这些分档价格之上。"
   }
 }

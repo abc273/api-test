@@ -10,8 +10,9 @@ import {
 import { DataTableColumnHeader } from '@/components/data-table/column-header'
 import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
+import { hasOutputTierPricing, isTokenBasedModel } from '../lib/model-helpers'
 import {
+  formatOutputTierPriceRange,
   formatPrice,
   formatRequestPrice,
   stripTrailingZeros,
@@ -117,6 +118,27 @@ export function usePricingColumns(
         const isTokenBased = isTokenBasedModel(model)
 
         if (isTokenBased) {
+          if (hasOutputTierPricing(model)) {
+            return (
+              <div className='min-w-[180px]'>
+                <span className='font-mono text-sm tabular-nums'>
+                  {stripTrailingZeros(
+                    formatOutputTierPriceRange(
+                      model.output_tier_pricing,
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )
+                  )}
+                </span>
+                <div className='text-muted-foreground/50 text-[10px]'>
+                  / {tokenUnitLabel} {t('input tokens')}
+                </div>
+              </div>
+            )
+          }
+
           const inputPrice = stripTrailingZeros(
             formatPrice(
               model,

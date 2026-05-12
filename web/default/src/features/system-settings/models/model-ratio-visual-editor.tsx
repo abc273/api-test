@@ -13,6 +13,11 @@ import {
 } from '@tanstack/react-table'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  type OutputTierPricing,
+  sanitizeOutputTierPricing,
+  summarizeOutputTierPricing,
+} from '@/lib/output-tier-pricing'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -46,6 +51,7 @@ type ModelRatioVisualEditorProps = {
   audioCompletionRatio: string
   billingMode: string
   billingExpr: string
+  outputTierPricing: string
   onChange: (field: string, value: string) => void
 }
 
@@ -62,6 +68,7 @@ type ModelRow = {
   billingMode?: string
   billingExpr?: string
   requestRuleExpr?: string
+  outputTierPricing?: OutputTierPricing[]
   hasConflict: boolean
 }
 
@@ -84,6 +91,7 @@ export const ModelRatioVisualEditor = memo(
     audioCompletionRatio,
     billingMode,
     billingExpr,
+    outputTierPricing,
     onChange,
   }: ModelRatioVisualEditorProps) {
     const { t } = useTranslation()
@@ -179,6 +187,12 @@ export const ModelRatioVisualEditor = memo(
           context: 'billing expression',
         }
       )
+      const outputTierPricingMap = safeJsonParse<
+        Record<string, OutputTierPricing[]>
+      >(outputTierPricing, {
+        fallback: {},
+        context: 'output tier pricing',
+      })
 
       const modelNames = new Set([
         ...Object.keys(priceMap),
@@ -191,6 +205,7 @@ export const ModelRatioVisualEditor = memo(
         ...Object.keys(audioCompletionMap),
         ...Object.keys(billingModeMap),
         ...Object.keys(billingExprMap),
+        ...Object.keys(outputTierPricingMap),
       ])
 
       const modelData: ModelRow[] = Array.from(modelNames).map((name) => {
@@ -202,6 +217,7 @@ export const ModelRatioVisualEditor = memo(
         const image = imageMap[name]?.toString() || ''
         const audio = audioMap[name]?.toString() || ''
         const audioCompletion = audioCompletionMap[name]?.toString() || ''
+        const tiers = sanitizeOutputTierPricing(outputTierPricingMap[name])
 
         const modeForModel = billingModeMap[name]
         if (modeForModel === 'tiered_expr') {
@@ -224,6 +240,16 @@ export const ModelRatioVisualEditor = memo(
             imageRatio: image,
             audioRatio: audio,
             audioCompletionRatio: audioCompletion,
+            hasConflict: false,
+          }
+        }
+
+        if (modeForModel === 'output_tier_price') {
+          return {
+            name,
+            ratio,
+            billingMode: 'output_tier_price',
+            outputTierPricing: tiers,
             hasConflict: false,
           }
         }
@@ -263,9 +289,19 @@ export const ModelRatioVisualEditor = memo(
       audioCompletionRatio,
       billingMode,
       billingExpr,
+      outputTierPricing,
     ])
 
     const handleEdit = useCallback((model: ModelRow) => {
+      let nextBillingMode: ModelRatioData['billingMode'] = 'per-token'
+      if (model.billingMode === 'tiered_expr') {
+        nextBillingMode = 'tiered_expr'
+      } else if (model.billingMode === 'output_tier_price') {
+        nextBillingMode = 'output_tier_price'
+      } else if (model.price && model.price !== '') {
+        nextBillingMode = 'per-request'
+      }
+
       setEditData({
         name: model.name,
         price: model.price,
@@ -276,14 +312,10 @@ export const ModelRatioVisualEditor = memo(
         imageRatio: model.imageRatio,
         audioRatio: model.audioRatio,
         audioCompletionRatio: model.audioCompletionRatio,
-        billingMode:
-          model.billingMode === 'tiered_expr'
-            ? 'tiered_expr'
-            : model.price && model.price !== ''
-              ? 'per-request'
-              : 'per-token',
+        billingMode: nextBillingMode,
         billingExpr: model.billingExpr,
         requestRuleExpr: model.requestRuleExpr,
+        outputTierPricing: model.outputTierPricing,
       })
       setDialogOpen(true)
     }, [])
@@ -335,6 +367,12 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const outputTierPricingMap = safeJsonParse<
+          Record<string, OutputTierPricing[]>
+        >(outputTierPricing, {
+          fallback: {},
+          silent: true,
+        })
 
         delete priceMap[name]
         delete ratioMap[name]
@@ -346,6 +384,7 @@ export const ModelRatioVisualEditor = memo(
         delete audioCompletionMap[name]
         delete billingModeMap[name]
         delete billingExprMap[name]
+        delete outputTierPricingMap[name]
 
         onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
         onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
@@ -366,6 +405,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          'billing_setting.output_tier_pricing',
+          JSON.stringify(outputTierPricingMap, null, 2)
+        )
       },
       [
         modelPrice,
@@ -378,6 +421,7 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        outputTierPricing,
         onChange,
       ]
     )
@@ -387,7 +431,9 @@ export const ModelRatioVisualEditor = memo(
       // price is set, or when the model is in tiered_expr mode (the
       // expression is primary; ratios are fallback during sync delays).
       const isFallbackRow = (row: ModelRow) =>
-        row.billingMode === 'tiered_expr' || !!row.price
+        row.billingMode === 'tiered_expr' ||
+        row.billingMode === 'output_tier_price' ||
+        !!row.price
       const fallbackClass = (row: ModelRow) =>
         isFallbackRow(row) ? 'text-muted-foreground' : ''
 
@@ -403,6 +449,13 @@ export const ModelRatioVisualEditor = memo(
               {row.original.billingMode === 'tiered_expr' && (
                 <StatusBadge
                   label={t('Tiered')}
+                  variant='info'
+                  copyable={false}
+                />
+              )}
+              {row.original.billingMode === 'output_tier_price' && (
+                <StatusBadge
+                  label={t('Output tiers')}
                   variant='info'
                   copyable={false}
                 />
@@ -521,6 +574,43 @@ export const ModelRatioVisualEditor = memo(
           meta: { label: 'Audio comp.' },
         },
         {
+          accessorKey: 'outputTierPricing',
+          header: ({ column }) => (
+            <DataTableColumnHeader
+              column={column}
+              title={t('Tiered input price')}
+            />
+          ),
+          cell: ({ row }) => {
+            const summary = summarizeOutputTierPricing(
+              row.original.outputTierPricing
+            )
+            if (!summary) {
+              return '—'
+            }
+
+            const resolutions =
+              summary.resolutions.length > 0
+                ? summary.resolutions.join(', ')
+                : t('Default')
+
+            return (
+              <div className='space-y-0.5'>
+                <div className='font-mono text-sm'>
+                  ${summary.minPrice}
+                  {summary.maxPrice !== summary.minPrice &&
+                    ` - $${summary.maxPrice}`}
+                </div>
+                <div className='text-muted-foreground text-xs'>
+                  {t('{{count}} tiers', { count: summary.count })} ·{' '}
+                  {resolutions}
+                </div>
+              </div>
+            )
+          },
+          meta: { label: 'Tiered input price' },
+        },
+        {
           id: 'actions',
           cell: ({ row }) => (
             <div className='flex justify-end gap-2'>
@@ -609,6 +699,12 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const outputTierPricingMap = safeJsonParse<
+          Record<string, OutputTierPricing[]>
+        >(outputTierPricing, {
+          fallback: {},
+          silent: true,
+        })
 
         delete priceMap[data.name]
         delete ratioMap[data.name]
@@ -620,6 +716,7 @@ export const ModelRatioVisualEditor = memo(
         delete audioCompletionMap[data.name]
         delete billingModeMap[data.name]
         delete billingExprMap[data.name]
+        delete outputTierPricingMap[data.name]
 
         const setIfPresent = (
           target: Record<string, number>,
@@ -651,6 +748,14 @@ export const ModelRatioVisualEditor = memo(
           setIfPresent(imageMap, data.imageRatio)
           setIfPresent(audioMap, data.audioRatio)
           setIfPresent(audioCompletionMap, data.audioCompletionRatio)
+        } else if (data.billingMode === 'output_tier_price') {
+          const normalizedTiers = sanitizeOutputTierPricing(
+            data.outputTierPricing || []
+          )
+          if (normalizedTiers.length > 0) {
+            billingModeMap[data.name] = 'output_tier_price'
+            outputTierPricingMap[data.name] = normalizedTiers
+          }
         } else if (data.price && data.price !== '') {
           setIfPresent(priceMap, data.price)
         } else {
@@ -682,6 +787,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          'billing_setting.output_tier_pricing',
+          JSON.stringify(outputTierPricingMap, null, 2)
+        )
       },
       [
         modelPrice,
@@ -694,6 +803,7 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        outputTierPricing,
         onChange,
       ]
     )
@@ -780,6 +890,7 @@ export const ModelRatioVisualEditor = memo(
       prevProps.audioCompletionRatio === nextProps.audioCompletionRatio &&
       prevProps.billingMode === nextProps.billingMode &&
       prevProps.billingExpr === nextProps.billingExpr &&
+      prevProps.outputTierPricing === nextProps.outputTierPricing &&
       prevProps.onChange === nextProps.onChange
     )
   }

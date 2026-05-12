@@ -123,6 +123,7 @@ const MODELS_SECTIONS = [
           ExposeRatioEnabled: settings.ExposeRatioEnabled,
           BillingMode: settings['billing_setting.billing_mode'],
           BillingExpr: settings['billing_setting.billing_expr'],
+          OutputTierPricing: settings['billing_setting.output_tier_pricing'],
         }}
         toolPricesDefault={settings['tool_price_setting.prices']}
         groupDefaults={{

@@ -35,6 +35,7 @@ const defaultModelSettings: ModelSettings = {
   ExposeRatioEnabled: false,
   'billing_setting.billing_mode': '{}',
   'billing_setting.billing_expr': '{}',
+  'billing_setting.output_tier_pricing': '{}',
   'tool_price_setting.prices': '{}',
   TopupGroupRatio: '',
   GroupRatio: '',

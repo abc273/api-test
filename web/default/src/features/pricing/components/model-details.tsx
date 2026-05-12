@@ -3,6 +3,10 @@ import { useParams, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import {
+  sanitizeOutputTierPricing,
+  summarizeOutputTierPricing,
+} from '@/lib/output-tier-pricing'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -20,10 +24,16 @@ import { usePricingData } from '../hooks/use-pricing-data'
 import { parseTags } from '../lib/filters'
 import {
   getAvailableGroups,
+  hasOutputTierPricing,
   replaceModelInPath,
   isTokenBasedModel,
 } from '../lib/model-helpers'
-import { formatGroupPrice, formatFixedPrice } from '../lib/price'
+import {
+  formatFixedPrice,
+  formatGroupPrice,
+  formatOutputTierPrice,
+  formatOutputTierPriceRange,
+} from '../lib/price'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
 
@@ -43,6 +53,7 @@ function ModelHeader(props: { model: PricingModel }) {
     : null
   const description = model.description || model.vendor_description || null
   const tags = parseTags(model.tags)
+  const isOutputTierPricing = hasOutputTierPricing(model)
 
   return (
     <header className='pb-5'>
@@ -75,6 +86,14 @@ function ModelHeader(props: { model: PricingModel }) {
             <span className='text-muted-foreground/30'>·</span>
             <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'>
               {t('Dynamic Pricing')}
+            </span>
+          </>
+        )}
+        {isOutputTierPricing && (
+          <>
+            <span className='text-muted-foreground/30'>·</span>
+            <span className='rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'>
+              {t('Output-tier pricing')}
             </span>
           </>
         )}
@@ -118,6 +137,7 @@ function PriceSection(props: {
     groupRatio,
   } = props
   const isTokenBased = isTokenBasedModel(model)
+  const isOutputTierPricing = hasOutputTierPricing(model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const defaultGroup = model.enable_groups?.[0] || ''
   const ratio = defaultGroup ? groupRatio[defaultGroup] || 1 : 1
@@ -164,17 +184,48 @@ function PriceSection(props: {
             {t('Per request')}
           </span>
           <span className='text-foreground font-mono text-sm font-semibold tabular-nums'>
-            {formatGroupPrice(
+            {formatFixedPrice(
               model,
               groupKey,
-              'input',
-              tokenUnit,
               showRechargePrice,
               priceRate,
               usdExchangeRate,
               groupRatioMap
             )}
           </span>
+        </div>
+      </section>
+    )
+  }
+
+  if (isOutputTierPricing) {
+    return (
+      <section className='border-b py-4'>
+        <SectionTitle>{t('Price')}</SectionTitle>
+        <div className='space-y-1.5'>
+          <div className='flex items-baseline justify-between'>
+            <span className='text-muted-foreground text-sm'>
+              {t('Tiered input price')}
+            </span>
+            <span className='text-foreground font-mono text-sm tabular-nums'>
+              {formatOutputTierPriceRange(
+                model.output_tier_pricing,
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate,
+                ratio
+              )}
+              <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
+                / {tokenUnitLabel}
+              </span>
+            </span>
+          </div>
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'The exact input price depends on the matched output tier, such as resolution or whether video input is included.'
+            )}
+          </p>
         </div>
       </section>
     )
@@ -258,6 +309,79 @@ function EndpointsSection(props: {
   )
 }
 
+function OutputTierPricingSection(props: {
+  model: PricingModel
+  tokenUnit: TokenUnit
+  showRechargePrice: boolean
+  priceRate: number
+  usdExchangeRate: number
+}) {
+  const { t } = useTranslation()
+  const tiers = sanitizeOutputTierPricing(props.model.output_tier_pricing)
+  const summary = summarizeOutputTierPricing(tiers)
+
+  if (!hasOutputTierPricing(props.model) || tiers.length === 0 || !summary) {
+    return null
+  }
+
+  const tokenUnitLabel = props.tokenUnit === 'K' ? '1K' : '1M'
+
+  const videoInputText = (value: boolean | undefined) => {
+    if (value === true) {
+      return t('Required')
+    }
+    if (value === false) {
+      return t('Excluded')
+    }
+    return t('Any')
+  }
+
+  return (
+    <section className='border-b py-4'>
+      <SectionTitle>{t('Output Tier Pricing')}</SectionTitle>
+      <div className='space-y-2'>
+        {tiers.map((tier, index) => (
+          <div
+            key={`${tier.label || tier.resolution || 'tier'}-${index}`}
+            className='flex items-start justify-between gap-4 rounded-md border p-3'
+          >
+            <div className='space-y-1'>
+              <div className='text-sm font-medium'>
+                {tier.label || t('Tier {{index}}', { index: index + 1 })}
+              </div>
+              <div className='text-muted-foreground flex flex-wrap gap-2 text-xs'>
+                <span>
+                  {t('Resolution')}: {tier.resolution || t('Any')}
+                </span>
+                <span>
+                  {t('Video input')}: {videoInputText(tier.has_video_input)}
+                </span>
+              </div>
+            </div>
+            <div className='text-right'>
+              <div className='font-mono text-sm tabular-nums'>
+                {formatOutputTierPrice(
+                  tier,
+                  props.tokenUnit,
+                  props.showRechargePrice,
+                  props.priceRate,
+                  props.usdExchangeRate
+                )}
+              </div>
+              <div className='text-muted-foreground/40 text-[10px]'>
+                / {tokenUnitLabel}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className='text-muted-foreground mt-2 text-xs'>
+        {t('Group ratios shown below are applied on top of these tier prices.')}
+      </p>
+    </section>
+  )
+}
+
 function AutoGroupChain(props: { model: PricingModel; autoGroups: string[] }) {
   const { t } = useTranslation()
   const modelEnableGroups = Array.isArray(props.model.enable_groups)
@@ -315,6 +439,7 @@ function GroupPricingSection(props: {
   )
 
   const isTokenBased = isTokenBasedModel(model)
+  const isOutputTierPricing = hasOutputTierPricing(model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
 
   const extraPriceTypes = useMemo(() => {
@@ -359,7 +484,11 @@ function GroupPricingSection(props: {
             <TableRow className='hover:bg-transparent'>
               <TableHead className={thClass}>{t('Group')}</TableHead>
               <TableHead className={thClass}>{t('Ratio')}</TableHead>
-              {isTokenBased ? (
+              {isTokenBased && isOutputTierPricing ? (
+                <TableHead className={`${thClass} text-right`}>
+                  {t('Tiered input price')}
+                </TableHead>
+              ) : isTokenBased ? (
                 <>
                   <TableHead className={`${thClass} text-right`}>
                     {t('Input')}
@@ -392,7 +521,18 @@ function GroupPricingSection(props: {
                   <TableCell className='text-muted-foreground py-2.5 font-mono text-xs'>
                     {ratio}x
                   </TableCell>
-                  {isTokenBased ? (
+                  {isTokenBased && isOutputTierPricing ? (
+                    <TableCell className='py-2.5 text-right font-mono'>
+                      {formatOutputTierPriceRange(
+                        model.output_tier_pricing,
+                        tokenUnit,
+                        showRechargePrice,
+                        priceRate,
+                        usdExchangeRate,
+                        ratio
+                      )}
+                    </TableCell>
+                  ) : isTokenBased ? (
                     <>
                       <TableCell className='py-2.5 text-right font-mono'>
                         {formatGroupPrice(
@@ -555,6 +695,14 @@ export function ModelDetails() {
           tokenUnit={tokenUnit}
           showRechargePrice={search.rechargePrice ?? false}
           groupRatio={groupRatio || {}}
+        />
+
+        <OutputTierPricingSection
+          model={model}
+          tokenUnit={tokenUnit}
+          showRechargePrice={search.rechargePrice ?? false}
+          priceRate={priceRate ?? 1}
+          usdExchangeRate={usdExchangeRate ?? 1}
         />
 
         <EndpointsSection

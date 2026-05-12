@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 // Pricing Types
 // ----------------------------------------------------------------------------
+import type { OutputTierPricing } from '@/lib/output-tier-pricing'
 
 export type PricingVendor = {
   id: number
@@ -35,6 +36,8 @@ export type PricingModel = {
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  /** Tiered input pricing matched by output type */
+  output_tier_pricing?: OutputTierPricing[]
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
 }

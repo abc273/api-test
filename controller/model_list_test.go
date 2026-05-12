@@ -120,6 +120,31 @@ func withTieredBillingConfig(t *testing.T, modes map[string]string, exprs map[st
 	model.InvalidatePricingCache()
 }
 
+func withOutputTierPricingConfig(t *testing.T, modes map[string]string, tiers string) {
+	t.Helper()
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		if strings.HasPrefix(key, "billing_setting.") {
+			saved[key] = value
+		}
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+		model.InvalidatePricingCache()
+	})
+
+	modeBytes, err := common.Marshal(modes)
+	require.NoError(t, err)
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode":                string(modeBytes),
+		"billing_setting.output_tier_pricing": tiers,
+	}))
+	model.InvalidatePricingCache()
+}
+
 func withSelfUseModeDisabled(t *testing.T) {
 	t.Helper()
 
@@ -239,4 +264,59 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	require.NotContains(t, ids, "zz-token-tiered-empty-expr-model")
 	require.NotContains(t, ids, "zz-token-tiered-missing-expr-model")
 	require.NotContains(t, ids, "zz-token-unpriced-model")
+}
+
+func TestListModelsIncludesOutputTierPricingModel(t *testing.T) {
+	withSelfUseModeDisabled(t)
+	withOutputTierPricingConfig(t, map[string]string{
+		"zz-output-tier-visible-model":      "output_tier_price",
+		"zz-output-tier-empty-model":        "output_tier_price",
+		"zz-output-tier-invalid-price-model": "output_tier_price",
+	}, `{
+  "zz-output-tier-visible-model": [
+    {"label":"720p","resolution":"720p","input_price":31},
+    {"label":"1080p video","resolution":"1080p","has_video_input":true,"input_price":46}
+  ],
+  "zz-output-tier-empty-model": [],
+  "zz-output-tier-invalid-price-model": [
+    {"label":"bad","resolution":"720p","input_price":0}
+  ]
+}`)
+
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1002,
+		Username: "output-tier-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "zz-output-tier-visible-model", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "zz-output-tier-empty-model", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "zz-output-tier-invalid-price-model", ChannelId: 1, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	ctx.Set("id", 1002)
+
+	ListModels(ctx, constant.ChannelTypeOpenAI)
+
+	ids := decodeListModelsResponse(t, recorder)
+	require.Contains(t, ids, "zz-output-tier-visible-model")
+	require.NotContains(t, ids, "zz-output-tier-empty-model")
+	require.NotContains(t, ids, "zz-output-tier-invalid-price-model")
+
+	pricingByName := pricingByModelName(model.GetPricing())
+	visiblePricing, ok := pricingByName["zz-output-tier-visible-model"]
+	require.True(t, ok)
+	require.Equal(t, "output_tier_price", visiblePricing.BillingMode)
+	require.Len(t, visiblePricing.OutputTierPricing, 2)
+
+	emptyPricing, ok := pricingByName["zz-output-tier-empty-model"]
+	require.True(t, ok)
+	require.Empty(t, emptyPricing.BillingMode)
+	require.Empty(t, emptyPricing.OutputTierPricing)
 }

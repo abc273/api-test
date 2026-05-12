@@ -167,6 +167,10 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
 
+	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeOutputTierPrice {
+		return modelPriceHelperOutputTierPrice(c, info, groupRatioInfo)
+	}
+
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success
 	var modelRatio float64
@@ -231,11 +235,58 @@ func HasModelBillingConfig(modelName string) bool {
 	if _, ok, _ := ratio_setting.GetModelRatio(modelName); ok {
 		return true
 	}
-	if billing_setting.GetBillingMode(modelName) != billing_setting.BillingModeTieredExpr {
+	switch billing_setting.GetBillingMode(modelName) {
+	case billing_setting.BillingModeTieredExpr:
+		expr, ok := billing_setting.GetBillingExpr(modelName)
+		return ok && strings.TrimSpace(expr) != ""
+	case billing_setting.BillingModeOutputTierPrice:
+		tiers, ok := billing_setting.GetOutputTierPricing(modelName)
+		return ok && len(tiers) > 0
+	default:
 		return false
 	}
-	expr, ok := billing_setting.GetBillingExpr(modelName)
-	return ok && strings.TrimSpace(expr) != ""
+}
+
+func modelPriceHelperOutputTierPrice(c *gin.Context, info *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
+	tiers, ok := billing_setting.GetOutputTierPricing(info.OriginModelName)
+	if !ok || len(tiers) == 0 {
+		return types.PriceData{}, fmt.Errorf("model %s is configured as output_tier_price but has no tier pricing", info.OriginModelName)
+	}
+
+	profile, err := buildTaskPricingProfile(c)
+	if err != nil {
+		return types.PriceData{}, err
+	}
+
+	matchedTier, ok := billing_setting.MatchOutputTierPricing(profile, tiers)
+	if !ok {
+		return types.PriceData{}, fmt.Errorf(
+			"model %s has no matching output tier pricing (resolution=%s, has_video_input=%t)",
+			info.OriginModelName,
+			billing_setting.NormalizeResolution(profile.Resolution),
+			profile.HasVideoInput,
+		)
+	}
+
+	modelRatio, quota := buildOutputTierPriceData(matchedTier.InputPrice, groupRatioInfo.GroupRatio)
+	freeModel := false
+	if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
+		if groupRatioInfo.GroupRatio == 0 || modelRatio == 0 {
+			quota = 0
+			freeModel = true
+		}
+	}
+
+	priceData := types.PriceData{
+		FreeModel:      freeModel,
+		ModelPrice:     -1,
+		ModelRatio:     modelRatio,
+		UsePrice:       false,
+		Quota:          quota,
+		GroupRatioInfo: groupRatioInfo,
+	}
+	info.PriceData = priceData
+	return priceData, nil
 }
 
 func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {

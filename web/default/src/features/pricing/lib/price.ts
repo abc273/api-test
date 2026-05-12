@@ -1,4 +1,9 @@
 import { formatCurrencyFromUSD } from '@/lib/currency'
+import {
+  type OutputTierPricing,
+  sanitizeOutputTierPricing,
+  summarizeOutputTierPricing,
+} from '@/lib/output-tier-pricing'
 import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
 
@@ -241,6 +246,74 @@ export function formatFixedPrice(
     digitsSmall: 4,
     abbreviate: false,
   })
+}
+
+export function formatOutputTierPrice(
+  tier: OutputTierPricing,
+  tokenUnit: TokenUnit,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1,
+  groupRatio = 1
+): string {
+  const priceInUSD = applyRechargeRate(
+    tier.input_price * groupRatio,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate
+  )
+
+  return formatCurrencyFromUSD(priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit], {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
+}
+
+export function formatOutputTierPriceRange(
+  tiers: Array<Partial<OutputTierPricing>> | null | undefined,
+  tokenUnit: TokenUnit,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1,
+  groupRatio = 1
+): string {
+  const summary = summarizeOutputTierPricing(tiers)
+  if (!summary) {
+    return '-'
+  }
+
+  const minTier = formatOutputTierPrice(
+    { input_price: summary.minPrice },
+    tokenUnit,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate,
+    groupRatio
+  )
+  const maxTier = formatOutputTierPrice(
+    { input_price: summary.maxPrice },
+    tokenUnit,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate,
+    groupRatio
+  )
+
+  const minLabel = stripTrailingZeros(minTier)
+  const maxLabel = stripTrailingZeros(maxTier)
+
+  return summary.minPrice === summary.maxPrice
+    ? minLabel
+    : `${minLabel} - ${maxLabel}`
+}
+
+export function getOutputTierSortPrice(model: PricingModel): number {
+  const tiers = sanitizeOutputTierPricing(model.output_tier_pricing)
+  if (tiers.length === 0) {
+    return model.model_ratio
+  }
+  return Math.min(...tiers.map((tier) => tier.input_price / 2))
 }
 
 /**

@@ -60,3 +60,59 @@ func TestModelPriceHelperTieredUsesPreloadedRequestInput(t *testing.T) {
 	require.Equal(t, billing_setting.BillingModeTieredExpr, info.TieredBillingSnapshot.BillingMode)
 	require.Equal(t, common.QuotaPerUnit, info.TieredBillingSnapshot.QuotaPerUnit)
 }
+
+func TestModelPriceHelperPerCallMatchesOutputTierInputPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode": `{"output-tier-test-model":"output_tier_price"}`,
+		"billing_setting.output_tier_pricing": `{
+			"output-tier-test-model": [
+				{"label":"default 720p","resolution":"720p","input_price":31},
+				{"label":"1080p video","resolution":"1080p","has_video_input":true,"input_price":46}
+			]
+		}`,
+	}))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodPost, "/v1/videos/generations", nil)
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	ctx.Set("group", "default")
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Prompt: "make a video",
+		Metadata: map[string]interface{}{
+			"resolution": "1080p",
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "video_url",
+					"video_url": map[string]interface{}{
+						"url": "https://example.com/video.mp4",
+					},
+				},
+			},
+		},
+	})
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "output-tier-test-model",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+
+	priceData, err := ModelPriceHelperPerCall(ctx, info)
+	require.NoError(t, err)
+	require.False(t, priceData.UsePrice)
+	require.Equal(t, 23.0, priceData.ModelRatio)
+	require.Positive(t, priceData.Quota)
+}

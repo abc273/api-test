@@ -1,3 +1,4 @@
+import { hasOutputTierPricing as hasTierPricing } from '@/lib/output-tier-pricing'
 import { EXCLUDED_GROUPS, QUOTA_TYPE_VALUES } from '../constants'
 import type { PricingModel } from '../types'
 
@@ -33,4 +34,11 @@ export function replaceModelInPath(path: string, modelName: string): string {
  */
 export function isTokenBasedModel(model: PricingModel): boolean {
   return model.quota_type === QUOTA_TYPE_VALUES.TOKEN
+}
+
+export function hasOutputTierPricing(model: PricingModel): boolean {
+  return (
+    model.billing_mode === 'output_tier_price' &&
+    hasTierPricing(model.output_tier_pricing)
+  )
 }

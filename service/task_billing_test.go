@@ -266,6 +266,33 @@ func TestRefundTaskQuota_ZeroQuota(t *testing.T) {
 	assert.Equal(t, int64(0), countLogs(t))
 }
 
+func TestRecalculateTaskQuotaByTokensUsesBillingContextSnapshot(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 4, 4, 4
+	seedUser(t, userID, 200000)
+	seedToken(t, tokenID, userID, "sk-snapshot", 200000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 1000, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.ModelRatio = 23
+	task.PrivateData.BillingContext.GroupRatio = 1.5
+	task.PrivateData.BillingContext.OtherRatios = map[string]float64{
+		"video_input": 0.5,
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+
+	// If settlement incorrectly re-read live model ratios, it would bail out
+	// because "test-model" has no ratio setting in this test DB.
+	RecalculateTaskQuotaByTokens(ctx, task, 1000)
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeConsume, log.Type)
+	assert.Equal(t, 16250, log.Quota)
+}
+
 func TestRefundTaskQuota_NoToken(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { type OutputTierPricing } from '@/lib/output-tier-pricing'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -30,6 +31,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { OutputTierPricingEditor } from './output-tier-pricing-editor'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 const createModelDialogSchema = (t: (key: string) => string) =>
@@ -47,7 +49,11 @@ const createModelDialogSchema = (t: (key: string) => string) =>
 
 type ModelDialogFormValues = z.infer<ReturnType<typeof createModelDialogSchema>>
 
-type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+type PricingMode =
+  | 'per-token'
+  | 'per-request'
+  | 'tiered_expr'
+  | 'output_tier_price'
 type PricingSubMode = 'ratio' | 'price'
 
 export type ModelRatioData = {
@@ -60,9 +66,14 @@ export type ModelRatioData = {
   imageRatio?: string
   audioRatio?: string
   audioCompletionRatio?: string
-  billingMode?: 'per-token' | 'per-request' | 'tiered_expr'
+  billingMode?:
+    | 'per-token'
+    | 'per-request'
+    | 'tiered_expr'
+    | 'output_tier_price'
   billingExpr?: string
   requestRuleExpr?: string
+  outputTierPricing?: OutputTierPricing[]
 }
 
 type ModelRatioDialogProps = {
@@ -86,6 +97,9 @@ export function ModelRatioDialog({
   const [completionPrice, setCompletionPrice] = useState('')
   const [billingExpr, setBillingExpr] = useState('')
   const [requestRuleExpr, setRequestRuleExpr] = useState('')
+  const [outputTierPricing, setOutputTierPricing] = useState<
+    OutputTierPricing[]
+  >([])
   const isEditMode = !!editData
 
   const form = useForm<ModelDialogFormValues>({
@@ -112,6 +126,8 @@ export function ModelRatioDialog({
 
       if (editData.billingMode === 'tiered_expr') {
         setPricingMode('tiered_expr')
+      } else if (editData.billingMode === 'output_tier_price') {
+        setPricingMode('output_tier_price')
       } else if (editData.price && editData.price !== '') {
         setPricingMode('per-request')
       } else {
@@ -125,6 +141,7 @@ export function ModelRatioDialog({
           }
         }
       }
+      setOutputTierPricing(editData.outputTierPricing || [])
     } else {
       form.reset({
         name: '',
@@ -143,6 +160,7 @@ export function ModelRatioDialog({
       setCompletionPrice('')
       setBillingExpr('')
       setRequestRuleExpr('')
+      setOutputTierPricing([])
       setAdvancedOpen(false)
     }
   }, [editData, form, open])
@@ -169,6 +187,10 @@ export function ModelRatioDialog({
     if (pricingMode === 'tiered_expr') {
       data.billingExpr = billingExpr
       data.requestRuleExpr = requestRuleExpr
+    }
+
+    if (pricingMode === 'output_tier_price') {
+      data.outputTierPricing = outputTierPricing
     }
 
     onSave(data)
@@ -270,6 +292,15 @@ export function ModelRatioDialog({
                     {t('Tiered (billing expression)')}
                   </Label>
                 </div>
+                <div className='flex items-center space-x-2'>
+                  <RadioGroupItem
+                    value='output_tier_price'
+                    id='output_tier_price'
+                  />
+                  <Label htmlFor='output_tier_price' className='font-normal'>
+                    {t('Tiered input price (by output type)')}
+                  </Label>
+                </div>
               </RadioGroup>
             </div>
 
@@ -280,6 +311,12 @@ export function ModelRatioDialog({
                 requestRuleExpr={requestRuleExpr}
                 onBillingExprChange={setBillingExpr}
                 onRequestRuleExprChange={setRequestRuleExpr}
+              />
+            ) : pricingMode === 'output_tier_price' ? (
+              <OutputTierPricingEditor
+                key={`${form.getValues('name')}-${open ? 'open' : 'closed'}-${pricingMode}`}
+                value={outputTierPricing}
+                onChange={setOutputTierPricing}
               />
             ) : pricingMode === 'per-request' ? (
               <FormField

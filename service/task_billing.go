@@ -253,40 +253,50 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	}
 
 	modelName := taskModelName(task)
+	billingContext := task.PrivateData.BillingContext
 
-	// 获取模型价格和倍率
-	modelRatio, hasRatioSetting, _ := ratio_setting.GetModelRatio(modelName)
-	// 只有配置了倍率(非固定价格)时才按 token 重新计费
-	if !hasRatioSetting || modelRatio <= 0 {
-		return
-	}
-
-	// 获取用户和组的倍率信息
-	group := task.Group
-	if group == "" {
-		user, err := model.GetUserById(task.UserId, false)
-		if err == nil {
-			group = user.Group
+	modelRatio := 0.0
+	if billingContext != nil && billingContext.ModelRatio > 0 {
+		modelRatio = billingContext.ModelRatio
+	} else {
+		var hasRatioSetting bool
+		modelRatio, hasRatioSetting, _ = ratio_setting.GetModelRatio(modelName)
+		// 只有配置了倍率(非固定价格)时才按 token 重新计费
+		if !hasRatioSetting || modelRatio <= 0 {
+			return
 		}
 	}
-	if group == "" {
-		return
-	}
 
-	groupRatio := ratio_setting.GetGroupRatio(group)
-	userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
-
-	var finalGroupRatio float64
-	if hasUserGroupRatio {
-		finalGroupRatio = userGroupRatio
+	finalGroupRatio := 0.0
+	if billingContext != nil && billingContext.GroupRatio > 0 {
+		finalGroupRatio = billingContext.GroupRatio
 	} else {
-		finalGroupRatio = groupRatio
+		// 获取用户和组的倍率信息
+		group := task.Group
+		if group == "" {
+			user, err := model.GetUserById(task.UserId, false)
+			if err == nil {
+				group = user.Group
+			}
+		}
+		if group == "" {
+			return
+		}
+
+		groupRatio := ratio_setting.GetGroupRatio(group)
+		userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
+
+		if hasUserGroupRatio {
+			finalGroupRatio = userGroupRatio
+		} else {
+			finalGroupRatio = groupRatio
+		}
 	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）
 	otherMultiplier := 1.0
-	if bc := task.PrivateData.BillingContext; bc != nil {
-		for _, r := range bc.OtherRatios {
+	if billingContext != nil {
+		for _, r := range billingContext.OtherRatios {
 			if r != 1.0 && r > 0 {
 				otherMultiplier *= r
 			}
