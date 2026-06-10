@@ -125,7 +125,7 @@ list_snapshots() {
 
   output="$(git for-each-ref \
     --sort=-creatordate \
-    --format='%(refname:short)|%(objectname:short)|%(creatordate:iso8601)|%(subject)' \
+    --format='%(refname:short)|%(*objectname:short)|%(creatordate:iso8601)|%(*subject)' \
     "refs/tags/${TAG_PREFIX}")"
 
   if [[ -z "$output" ]]; then
