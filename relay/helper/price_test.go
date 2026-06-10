@@ -10,6 +10,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -114,5 +115,105 @@ func TestModelPriceHelperPerCallMatchesOutputTierInputPrice(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, priceData.UsePrice)
 	require.Equal(t, 23.0, priceData.ModelRatio)
+	require.Positive(t, priceData.Quota)
+}
+
+func TestModelPriceHelperPerCallUsesExplicitSRAliasRatioBeforeBaseBillingMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode": `{"seedance2":"output_tier_price"}`,
+		"billing_setting.output_tier_pricing": `{
+			"seedance2": [
+				{"label":"default 720p","resolution":"720p","input_price":31}
+			]
+		}`,
+	}))
+	savedRatios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"seedance2-sr":24.5}`))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodPost, "/v1/videos/generations", nil)
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	ctx.Set("group", "default")
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Model:  "seedance2-sr",
+		Prompt: "make a video",
+	})
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "seedance2-sr",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+
+	priceData, err := ModelPriceHelperPerCall(ctx, info)
+	require.NoError(t, err)
+	require.False(t, priceData.UsePrice)
+	require.Equal(t, 24.5, priceData.ModelRatio)
+	require.Positive(t, priceData.Quota)
+}
+
+func TestModelPriceHelperPerCallFallsBackToBaseModelForUnpricedDedicatedSRAlias(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode": `{"seedance2":"output_tier_price"}`,
+		"billing_setting.output_tier_pricing": `{
+			"seedance2": [
+				{"label":"default 720p","resolution":"720p","input_price":31}
+			]
+		}`,
+	}))
+	savedRatios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{}`))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodPost, "/v1/videos/generations", nil)
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	ctx.Set("group", "default")
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Model:  "seedance2-sr",
+		Prompt: "make a video",
+	})
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "seedance2-sr",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+
+	priceData, err := ModelPriceHelperPerCall(ctx, info)
+	require.NoError(t, err)
+	require.False(t, priceData.UsePrice)
+	require.Equal(t, 15.5, priceData.ModelRatio)
 	require.Positive(t, priceData.Quota)
 }

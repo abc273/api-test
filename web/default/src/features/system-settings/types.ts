@@ -111,6 +111,7 @@ export type AuthSettings = {
 }
 
 export type ContentSettings = {
+  ApiDocs: string
   'console_setting.api_info': string
   'console_setting.announcements': string
   'console_setting.faq': string
@@ -158,6 +159,21 @@ export type IntegrationSettings = {
   'portrait_asset.project_name': string
   'portrait_asset.region': string
   'portrait_asset.callback_base_url': string
+  'video_super_resolution.enabled': boolean
+  'video_super_resolution.base_url': string
+  'video_super_resolution.api_key': string
+  'video_super_resolution.output_tos_path': string
+  'video_super_resolution.operator_id': string
+  'video_super_resolution.operator_version': string
+  'video_super_resolution.preserve_audio': boolean
+  'video_super_resolution.output_quality_mode': string
+  'video_super_resolution.tos_public_base_url': string
+  'video_super_resolution.tos_endpoint': string
+  'video_super_resolution.tos_region': string
+  'video_super_resolution.tos_access_key': string
+  'video_super_resolution.tos_secret_key': string
+  'video_super_resolution.tos_session_token': string
+  'video_super_resolution.tos_presign_expires': number
   PayAddress: string
   EpayId: string
   EpayKey: string

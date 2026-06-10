@@ -359,45 +359,52 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if privateData.Key != "" {
 		key = privateData.Key
 	}
-	resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
-		"task_id": task.GetUpstreamTaskID(),
-		"action":  task.Action,
-	}, proxy)
-	if err != nil {
-		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
-	}
-	defer resp.Body.Close()
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
-	}
-
-	logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask response: %s", string(responseBody)))
-
 	snap := task.Snapshot()
-
 	taskResult := &relaycommon.TaskInfo{}
-	// try parse as New API response format
-	var responseItems dto.TaskResponse[model.Task]
-	if err = common.Unmarshal(responseBody, &responseItems); err == nil && responseItems.IsSuccess() {
-		logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask parsed as new api response format: %+v", responseItems))
-		t := responseItems.Data
-		taskResult.TaskID = t.TaskID
-		taskResult.Status = string(t.Status)
-		taskResult.Url = t.GetResultURL()
-		taskResult.Progress = t.Progress
-		taskResult.Reason = t.FailReason
-		task.Data = t.Data
-	} else if taskResult, err = adaptor.ParseTaskResult(responseBody); err != nil {
-		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
+	responseBody := []byte(nil)
+	postProcessed := false
+	var err error
+	if taskResult, postProcessed, err = PollVideoSuperResolution(ctx, task); err != nil {
+		return fmt.Errorf("poll video super resolution failed for task %s: %w", taskId, err)
 	}
+	if !postProcessed {
+		resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
+			"task_id": task.GetUpstreamTaskID(),
+			"action":  task.Action,
+		}, proxy)
+		if err != nil {
+			return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
+		}
+		defer resp.Body.Close()
+		responseBody, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
+		}
 
-	task.Data = redactVideoResponseBody(responseBody)
+		logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask response: %s", string(responseBody)))
+
+		// try parse as New API response format
+		var responseItems dto.TaskResponse[model.Task]
+		if err = common.Unmarshal(responseBody, &responseItems); err == nil && responseItems.IsSuccess() {
+			logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask parsed as new api response format: %+v", responseItems))
+			t := responseItems.Data
+			taskResult.TaskID = t.TaskID
+			taskResult.Status = string(t.Status)
+			taskResult.Url = t.GetResultURL()
+			taskResult.Progress = t.Progress
+			taskResult.Reason = t.FailReason
+			task.Data = t.Data
+		} else if taskResult, err = adaptor.ParseTaskResult(responseBody); err != nil {
+			return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
+		}
+
+		task.Data = redactVideoResponseBody(responseBody)
+	}
 
 	logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask taskResult: %+v", taskResult))
 
 	now := time.Now().Unix()
-	if taskResult.Status == "" {
+	if taskResult.Status == "" && len(responseBody) > 0 {
 		//taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
 		errorResult := &dto.GeneralErrorResponse{}
 		if err = common.Unmarshal(responseBody, &errorResult); err == nil {
@@ -416,6 +423,17 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				logger.LogError(ctx, fmt.Sprintf("Task %s returned empty status with unrecognized error format, response: %s", taskId, string(responseBody)))
 				taskResult = relaycommon.FailTaskInfo("upstream returned unrecognized message")
 			}
+		}
+	}
+	if !postProcessed && taskResult.Status == string(model.TaskStatusSuccess) {
+		started, err := MaybeStartVideoSuperResolution(ctx, task, taskResult)
+		if err != nil {
+			return fmt.Errorf("start video super resolution failed for task %s: %w", taskId, err)
+		}
+		if started {
+			taskResult.Status = string(model.TaskStatusInProgress)
+			taskResult.Progress = "80%"
+			taskResult.Url = ""
 		}
 	}
 

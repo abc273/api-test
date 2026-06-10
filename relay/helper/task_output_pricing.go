@@ -6,6 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +30,21 @@ func resolveTaskPricingResolution(req relaycommon.TaskSubmitReq) string {
 			}
 		}
 	}
-	return billing_setting.NormalizeResolution(req.Size)
+	if resolution := billing_setting.NormalizeResolution(req.Resolution); resolution != "" {
+		return resolution
+	}
+	if resolution := billing_setting.NormalizeResolution(req.Size); resolution != "" {
+		return resolution
+	}
+
+	switch strings.TrimSpace(req.Model) {
+	case service.Seedance2ModelAlias, service.Seedance2SRModelAlias, service.SD20FastModelAlias, service.SD20FastSRModelAlias:
+		// These aliases are billed by output tier. Defaulting to 720p keeps the
+		// request on a valid pricing tier when the client omits resolution.
+		return "720p"
+	default:
+		return ""
+	}
 }
 
 func hasVideoInput(metadata map[string]interface{}) bool {

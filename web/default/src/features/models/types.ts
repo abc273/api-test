@@ -25,6 +25,7 @@ export interface Model {
   endpoints?: string
   status: number
   sync_official: number
+  video_super_resolution_enabled?: boolean
   created_time: number
   updated_time: number
   name_rule: number
@@ -220,6 +221,7 @@ export const modelFormSchema = z.object({
   name_rule: z.number().min(0).max(3).default(0),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
+  video_super_resolution_enabled: z.boolean().default(false),
 })
 
 export type ModelFormValues = z.infer<typeof modelFormSchema>

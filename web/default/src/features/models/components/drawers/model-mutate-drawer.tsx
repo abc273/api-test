@@ -70,6 +70,7 @@ const extendedModelFormSchema = z.object({
   name_rule: z.number(),
   status: z.boolean(),
   sync_official: z.boolean(),
+  video_super_resolution_enabled: z.boolean(),
   price: z.string().optional(),
   ratio: z.string().optional(),
   cacheRatio: z.string().optional(),
@@ -185,6 +186,7 @@ export function ModelMutateDrawer({
       name_rule: 0,
       status: true,
       sync_official: true,
+      video_super_resolution_enabled: false,
       price: '',
       ratio: '',
       cacheRatio: '',
@@ -244,6 +246,8 @@ export function ModelMutateDrawer({
         name_rule: model.name_rule || 0,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
+        video_super_resolution_enabled:
+          !!model.video_super_resolution_enabled,
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -348,6 +352,7 @@ export function ModelMutateDrawer({
         name_rule: 0,
         status: true,
         sync_official: true,
+        video_super_resolution_enabled: false,
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -733,6 +738,50 @@ export function ModelMutateDrawer({
                     </FormControl>
                     <FormDescription>
                       {t('Press Enter or comma to add tags')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='video_super_resolution_enabled'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Video Super Resolution')}</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        value={field.value ? 'enabled' : 'disabled'}
+                        onValueChange={(value) =>
+                          field.onChange(value === 'enabled')
+                        }
+                        className='flex gap-6'
+                      >
+                        <div className='flex items-center space-x-2'>
+                          <RadioGroupItem value='disabled' id='vsr-disabled' />
+                          <Label
+                            htmlFor='vsr-disabled'
+                            className='cursor-pointer font-normal'
+                          >
+                            {t('Disabled')}
+                          </Label>
+                        </div>
+                        <div className='flex items-center space-x-2'>
+                          <RadioGroupItem value='enabled' id='vsr-enabled' />
+                          <Label
+                            htmlFor='vsr-enabled'
+                            className='cursor-pointer font-normal'
+                          >
+                            {t('Enabled')}
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Mark this model as a super resolution model. Successful video tasks using this model will automatically continue into the video super resolution workflow.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

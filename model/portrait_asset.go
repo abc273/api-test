@@ -513,7 +513,6 @@ func UpdateOfficialPortraitAssetStatus(job *PortraitAssetJob, assetStatus string
 	job.Source = PortraitAssetSourceOfficial
 	job.AssetStatus = strings.TrimSpace(assetStatus)
 	if strings.TrimSpace(assetURL) != "" {
-		job.AssetURL = strings.TrimSpace(assetURL)
 		job.AssetPreview = strings.TrimSpace(assetURL)
 	}
 	switch strings.ToLower(strings.TrimSpace(assetStatus)) {

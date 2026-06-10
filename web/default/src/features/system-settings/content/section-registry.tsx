@@ -1,6 +1,7 @@
 import type { ContentSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { AnnouncementsSection } from './announcements-section'
+import { ApiDocsSection } from './api-docs-section'
 import { ApiInfoSection } from './api-info-section'
 import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
@@ -45,6 +46,14 @@ const CONTENT_SECTIONS = [
         enabled={settings['console_setting.announcements_enabled']}
         data={settings['console_setting.announcements']}
       />
+    ),
+  },
+  {
+    id: 'api-docs',
+    titleKey: 'API Docs',
+    descriptionKey: 'Configure the public API documentation page',
+    build: (settings: ContentSettings) => (
+      <ApiDocsSection defaultValue={settings.ApiDocs} />
     ),
   },
   {

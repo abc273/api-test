@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { type OutputTierPricing } from '@/lib/output-tier-pricing'
 import { Button } from '@/components/ui/button'
 import {
@@ -194,6 +195,11 @@ export function ModelRatioDialog({
     }
 
     onSave(data)
+    toast.success(
+      t(
+        'Changes applied to the form. Click "Save model ratios" to persist them.'
+      )
+    )
     form.reset()
     onOpenChange(false)
   }
@@ -680,7 +686,7 @@ export function ModelRatioDialog({
                 {t('Cancel')}
               </Button>
               <Button type='submit'>
-                {isEditMode ? t('Update') : t('Add')}
+                {isEditMode ? t('Apply') : t('Add')}
               </Button>
             </DialogFooter>
           </form>

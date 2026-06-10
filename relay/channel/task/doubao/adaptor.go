@@ -275,8 +275,12 @@ func (a *TaskAdaptor) GetChannelName() string {
 }
 
 func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo) (*requestPayload, error) {
+	modelName := strings.TrimSpace(req.Model)
+	if info != nil && info.ChannelMeta != nil && strings.TrimSpace(info.UpstreamModelName) != "" {
+		modelName = strings.TrimSpace(info.UpstreamModelName)
+	}
 	r := requestPayload{
-		Model:   req.Model,
+		Model:   modelName,
 		Content: []ContentItem{},
 	}
 
@@ -285,6 +289,7 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 		for _, imgURL := range req.Images {
 			r.Content = append(r.Content, ContentItem{
 				Type: "image_url",
+				Role: "reference_image",
 				ImageURL: &MediaURL{
 					URL: imgURL,
 				},
@@ -296,6 +301,19 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
 	}
+	if r.Resolution == "" && strings.TrimSpace(req.Resolution) != "" {
+		r.Resolution = strings.TrimSpace(req.Resolution)
+	}
+	if r.Ratio == "" && strings.TrimSpace(req.Ratio) != "" {
+		r.Ratio = strings.TrimSpace(req.Ratio)
+	}
+	if r.Resolution == "" {
+		switch service.NormalizeVideoSuperResolutionModelAlias(strings.TrimSpace(req.Model)) {
+		case service.Seedance15ModelAlias, service.Seedance2ModelAlias, service.Seedance20ModelAlias, service.Seedance20FastModelAlias, service.SD20FastModelAlias:
+			r.Resolution = "720p"
+		}
+	}
+	r.Resolution = service.ResolveDedicatedVideoSuperResolutionSourceResolution(req.Model, r.Resolution)
 
 	if assetURI, err := resolvePortraitAssetURI(req, info); err != nil {
 		return nil, err
@@ -309,11 +327,17 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 		})
 	}
 
-	if err := validatePortraitAssetReferences(info.UserId, r.Content); err != nil {
+	userID := 0
+	if info != nil {
+		userID = info.UserId
+	}
+	if err := validatePortraitAssetReferences(userID, r.Content); err != nil {
 		return nil, err
 	}
 
-	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
+	if req.Duration > 0 {
+		r.Duration = lo.ToPtr(dto.IntValue(req.Duration))
+	} else if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
 		r.Duration = lo.ToPtr(dto.IntValue(sec))
 	}
 
@@ -330,12 +354,16 @@ func resolvePortraitAssetURI(req *relaycommon.TaskSubmitReq, info *relaycommon.R
 	if req.Metadata == nil {
 		return "", nil
 	}
+	userID := 0
+	if info != nil {
+		userID = info.UserId
+	}
 	if raw, ok := req.Metadata["portrait_asset_id"]; ok {
 		id, ok := parsePortraitAssetJobID(raw)
 		if !ok || id <= 0 {
 			return "", fmt.Errorf("metadata.portrait_asset_id is invalid")
 		}
-		job, err := model.GetReadyUserPortraitAssetJob(info.UserId, id)
+		job, err := model.GetReadyUserPortraitAssetJob(userID, id)
 		if err != nil {
 			return "", fmt.Errorf("portrait asset %d is not ready or not bound to current user", id)
 		}
@@ -350,7 +378,7 @@ func resolvePortraitAssetURI(req *relaycommon.TaskSubmitReq, info *relaycommon.R
 		if assetID == "" {
 			return "", nil
 		}
-		job, err := model.GetReadyUserPortraitAssetByAssetID(info.UserId, assetID)
+		job, err := model.GetReadyUserPortraitAssetByAssetID(userID, assetID)
 		if err != nil {
 			return "", fmt.Errorf("portrait asset %s is not bound to current user", assetID)
 		}
@@ -435,7 +463,8 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error) {
 	var dResp responseTask
-	if err := common.Unmarshal(originTask.Data, &dResp); err != nil {
+	originalData := service.ExtractOriginalVideoTaskData(originTask.Data)
+	if err := common.Unmarshal(originalData, &dResp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal doubao task data failed")
 	}
 
@@ -444,9 +473,36 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.TaskID = originTask.TaskID
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
-	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
+	srState, hasSRState, srStateErr := service.ReadVideoSuperResolutionState(originTask.Data)
+	if originTask.Status == model.TaskStatusSuccess && originTask.GetResultURL() != "" {
+		openAIVideo.SetMetadata("url", originTask.GetResultURL())
+	}
+	if srStateErr == nil && hasSRState && srState != nil && !service.ShouldHideVideoSuperResolutionMetadata(originTask.Properties.OriginModelName) {
+		openAIVideo.SetMetadata("super_resolution", map[string]any{
+			"type":                     srState.Type,
+			"task_id":                  srState.TaskID,
+			"status":                   srState.Status,
+			"source_url":               srState.SourceURL,
+			"source_resolution":        srState.SourceResolution,
+			"target_resolution":        srState.TargetResolution,
+			"target_width":             srState.TargetWidth,
+			"target_height":            srState.TargetHeight,
+			"result_url":               srState.ResultURL,
+			"output_tos_url":           srState.OutputTOSURL,
+			"last_error":               srState.LastError,
+			"normalize_task_id":        srState.NormalizeTaskID,
+			"normalize_status":         srState.NormalizeStatus,
+			"normalize_result_url":     srState.NormalizeResultURL,
+			"normalize_output_tos_url": srState.NormalizeOutputTOSURL,
+			"normalize_last_error":     srState.NormalizeLastError,
+		})
+	} else if dResp.Content.VideoURL != "" && !(originTask.Status == model.TaskStatusSuccess && originTask.GetResultURL() != "") {
+		openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
+	}
 	openAIVideo.CreatedAt = originTask.CreatedAt
-	openAIVideo.CompletedAt = originTask.UpdatedAt
+	if originTask.Status == model.TaskStatusSuccess || originTask.Status == model.TaskStatusFailure {
+		openAIVideo.CompletedAt = originTask.UpdatedAt
+	}
 	openAIVideo.Model = originTask.Properties.OriginModelName
 
 	if dResp.Status == "failed" {

@@ -623,16 +623,21 @@ func resolveOfficialPortraitPreviewURL(job *model.PortraitAssetJob) (string, err
 		return "", errors.New("portrait asset job is nil")
 	}
 
+	sourceURL := strings.TrimSpace(job.AssetURL)
 	previewURL := ""
 	if model.NormalizePortraitAssetID(job.AssetID) != "" {
 		asset, err := service.GetVolcPortraitAsset(job.AssetID, job.ProjectName)
 		if err != nil {
 			common.SysError(fmt.Sprintf("failed to refresh official portrait asset preview for job %d: %v", job.Id, err))
 		} else {
-			previewURL = strings.TrimSpace(asset.URL)
+			previewURL = normalizePortraitPreviewCandidate(strings.TrimSpace(asset.URL), sourceURL)
 		}
 	}
-	previewURL = firstNonEmpty(previewURL, job.AssetPreview, job.AssetURL)
+	previewURL = firstNonEmpty(
+		previewURL,
+		normalizePortraitPreviewCandidate(strings.TrimSpace(job.AssetPreview), sourceURL),
+		sourceURL,
+	)
 	if previewURL == "" {
 		return "", errors.New("portrait asset preview not found")
 	}
@@ -699,6 +704,72 @@ func getPortraitAssetPublicBaseURL(c *gin.Context) string {
 
 func buildPublicURL(c *gin.Context, routePath string) string {
 	return strings.TrimRight(getPortraitAssetPublicBaseURL(c), "/") + "/" + strings.TrimLeft(routePath, "/")
+}
+
+func normalizePortraitPreviewCandidate(candidate string, fallback string) string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return ""
+	}
+	if portraitSignedURLExpired(candidate) {
+		return strings.TrimSpace(fallback)
+	}
+	return candidate
+}
+
+func portraitSignedURLExpired(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return false
+	}
+	query := parsed.Query()
+	now := time.Now().UTC()
+
+	if expiresAt, ok := parseUnixExpiry(query, "Expires", "expires"); ok {
+		return !expiresAt.After(now)
+	}
+
+	if expiresAt, ok := parseDatedExpiry(query, "X-Amz-Date", "X-Amz-Expires", "20060102T150405Z"); ok {
+		return !expiresAt.After(now)
+	}
+
+	if expiresAt, ok := parseDatedExpiry(query, "X-Tos-Date", "X-Tos-Expires", "20060102T150405Z"); ok {
+		return !expiresAt.After(now)
+	}
+
+	return false
+}
+
+func parseUnixExpiry(query url.Values, keys ...string) (time.Time, bool) {
+	for _, key := range keys {
+		value := strings.TrimSpace(query.Get(key))
+		if value == "" {
+			continue
+		}
+		seconds, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || seconds <= 0 {
+			continue
+		}
+		return time.Unix(seconds, 0).UTC(), true
+	}
+	return time.Time{}, false
+}
+
+func parseDatedExpiry(query url.Values, dateKey string, ttlKey string, layout string) (time.Time, bool) {
+	dateValue := strings.TrimSpace(query.Get(dateKey))
+	ttlValue := strings.TrimSpace(query.Get(ttlKey))
+	if dateValue == "" || ttlValue == "" {
+		return time.Time{}, false
+	}
+	startTime, err := time.Parse(layout, dateValue)
+	if err != nil {
+		return time.Time{}, false
+	}
+	seconds, err := strconv.ParseInt(ttlValue, 10, 64)
+	if err != nil || seconds <= 0 {
+		return time.Time{}, false
+	}
+	return startTime.UTC().Add(time.Duration(seconds) * time.Second), true
 }
 
 func resolveOfficialPortraitUploadFormat(filename string, detectedContentType string, declaredContentType string) (officialPortraitUploadFormat, error) {

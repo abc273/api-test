@@ -4,6 +4,7 @@ import { EmailSettingsSection } from './email-settings-section'
 import { IoNetDeploymentSettingsSection } from './ionet-deployment-settings-section'
 import { MonitoringSettingsSection } from './monitoring-settings-section'
 import { PaymentSettingsSection } from './payment-settings-section'
+import { VideoSuperResolutionSettingsSection } from './video-super-resolution-settings-section'
 import { VolcPortraitAssetSettingsSection } from './volc-portrait-asset-settings-section'
 import { WorkerSettingsSection } from './worker-settings-section'
 
@@ -136,6 +137,42 @@ const INTEGRATIONS_SECTIONS = [
           projectName: settings['portrait_asset.project_name'],
           region: settings['portrait_asset.region'],
           callbackBaseURL: settings['portrait_asset.callback_base_url'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'video-super-resolution',
+    titleKey: 'Video Super Resolution',
+    descriptionKey:
+      'Configure automatic post-processing for Seedance video outputs.',
+    build: (settings: IntegrationSettings) => (
+      <VideoSuperResolutionSettingsSection
+        defaultValues={{
+          enabled: settings['video_super_resolution.enabled'],
+          baseURL: settings['video_super_resolution.base_url'],
+          apiKey: settings['video_super_resolution.api_key'],
+          outputTOSPath: settings['video_super_resolution.output_tos_path'],
+          operatorID: settings['video_super_resolution.operator_id'],
+          operatorVersion: settings['video_super_resolution.operator_version'],
+          preserveAudio: settings['video_super_resolution.preserve_audio'],
+          outputQualityMode:
+            settings['video_super_resolution.output_quality_mode'] === 'master'
+              ? 'master'
+              : settings['video_super_resolution.output_quality_mode'] ===
+                    'compatible'
+                ? 'compatible'
+                : 'balanced',
+          tosPublicBaseURL:
+            settings['video_super_resolution.tos_public_base_url'],
+          tosEndpoint: settings['video_super_resolution.tos_endpoint'],
+          tosRegion: settings['video_super_resolution.tos_region'],
+          tosAccessKey: settings['video_super_resolution.tos_access_key'],
+          tosSecretKey: settings['video_super_resolution.tos_secret_key'],
+          tosSessionToken:
+            settings['video_super_resolution.tos_session_token'],
+          tosPresignExpires:
+            settings['video_super_resolution.tos_presign_expires'],
         }}
       />
     ),

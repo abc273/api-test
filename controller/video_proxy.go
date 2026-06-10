@@ -110,8 +110,16 @@ func VideoProxy(c *gin.Context) {
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
 	default:
-		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
-		videoURL = task.GetResultURL()
+		if resolvedURL, resolveErr := service.ResolveVideoSuperResolutionFetchURL(task); resolveErr != nil {
+			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to resolve post-processed video URL for task %s: %s", taskID, resolveErr.Error()))
+			videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve video content URL")
+			return
+		} else if strings.TrimSpace(resolvedURL) != "" {
+			videoURL = resolvedURL
+		} else {
+			// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
+			videoURL = task.GetResultURL()
+		}
 	}
 
 	videoURL = strings.TrimSpace(videoURL)

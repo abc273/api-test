@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -30,6 +31,38 @@ func modelPriceNotConfiguredError(modelName string, userId int) error {
 			"Model %s has not been priced by the administrator yet. Please contact the site administrator to enable this model.",
 		modelName, modelName,
 	)
+}
+
+func resolveFallbackBillingModelName(modelName string) string {
+	normalized := service.NormalizeVideoSuperResolutionModelAlias(modelName)
+	if normalized != strings.TrimSpace(modelName) {
+		return normalized
+	}
+	return strings.TrimSpace(modelName)
+}
+
+func getConfiguredBillingMode(modelName string) (string, bool) {
+	mode, ok := billing_setting.GetBillingModeCopy()[modelName]
+	return mode, ok
+}
+
+func resolveBillingMode(modelName string) string {
+	if mode, ok := getConfiguredBillingMode(modelName); ok {
+		return mode
+	}
+	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
+		return billing_setting.BillingModeRatio
+	}
+	if _, ok, _ := ratio_setting.GetModelRatio(modelName); ok {
+		return billing_setting.BillingModeRatio
+	}
+	fallbackModelName := resolveFallbackBillingModelName(modelName)
+	if fallbackModelName != modelName {
+		if mode, ok := getConfiguredBillingMode(fallbackModelName); ok {
+			return mode
+		}
+	}
+	return billing_setting.BillingModeRatio
 }
 
 // https://docs.claude.com/en/docs/build-with-claude/prompt-caching#1-hour-cache-duration
@@ -70,7 +103,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
 	// Check if this model uses tiered_expr billing
-	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
+	if resolveBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
 		return modelPriceHelperTiered(c, info, promptTokens, meta, groupRatioInfo)
 	}
 
@@ -167,7 +200,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
 
-	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeOutputTierPrice {
+	if resolveBillingMode(info.OriginModelName) == billing_setting.BillingModeOutputTierPrice {
 		return modelPriceHelperOutputTierPrice(c, info, groupRatioInfo)
 	}
 
@@ -243,12 +276,21 @@ func HasModelBillingConfig(modelName string) bool {
 		tiers, ok := billing_setting.GetOutputTierPricing(modelName)
 		return ok && len(tiers) > 0
 	default:
+		fallbackModelName := resolveFallbackBillingModelName(modelName)
+		if fallbackModelName != modelName {
+			return HasModelBillingConfig(fallbackModelName)
+		}
 		return false
 	}
 }
 
 func modelPriceHelperOutputTierPrice(c *gin.Context, info *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
-	tiers, ok := billing_setting.GetOutputTierPricing(info.OriginModelName)
+	billingModelName := info.OriginModelName
+	tiers, ok := billing_setting.GetOutputTierPricing(billingModelName)
+	if (!ok || len(tiers) == 0) && resolveFallbackBillingModelName(info.OriginModelName) != info.OriginModelName {
+		billingModelName = resolveFallbackBillingModelName(info.OriginModelName)
+		tiers, ok = billing_setting.GetOutputTierPricing(billingModelName)
+	}
 	if !ok || len(tiers) == 0 {
 		return types.PriceData{}, fmt.Errorf("model %s is configured as output_tier_price but has no tier pricing", info.OriginModelName)
 	}

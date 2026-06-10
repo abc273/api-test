@@ -13,11 +13,12 @@ import (
 	_ "github.com/QuantumNous/new-api/setting/portrait_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	_ "github.com/QuantumNous/new-api/setting/video_super_resolution_setting"
 )
 
 type Option struct {
 	Key   string `json:"key" gorm:"primaryKey"`
-	Value string `json:"value"`
+	Value string `json:"value" gorm:"type:text"`
 }
 
 func AllOption() ([]*Option, error) {
@@ -66,6 +67,7 @@ func InitOptionMap() {
 	common.OptionMap["SMTPForceAuthLogin"] = strconv.FormatBool(common.SMTPForceAuthLogin)
 	common.OptionMap["Notice"] = ""
 	common.OptionMap["About"] = ""
+	common.OptionMap["ApiDocs"] = ""
 	common.OptionMap["HomePageContent"] = ""
 	common.OptionMap["Footer"] = common.Footer
 	common.OptionMap["SystemName"] = common.SystemName

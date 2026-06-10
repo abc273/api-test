@@ -571,6 +571,14 @@ func RelayTask(c *gin.Context) {
 		service.LogTaskConsumption(c, relayInfo)
 
 		task := model.InitTask(result.Platform, relayInfo)
+		if taskReq, err := relaycommon.GetTaskRequest(c); err == nil {
+			task.Properties.VideoSuperResolutionRequested =
+				service.ShouldAutoEnableVideoSuperResolution(relayInfo.OriginModelName, relayInfo.UpstreamModelName, taskReq.Model) ||
+					service.IsVideoSuperResolutionRequested(taskReq.Metadata)
+		} else {
+			task.Properties.VideoSuperResolutionRequested =
+				service.ShouldAutoEnableVideoSuperResolution(relayInfo.OriginModelName, relayInfo.UpstreamModelName)
+		}
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId

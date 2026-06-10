@@ -6,12 +6,30 @@ import { tanstackRouter } from '@tanstack/router-plugin/rspack'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+function normalizeServerUrl(value?: string) {
+  const fallback = 'http://127.0.0.1:3000'
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return fallback
+  }
+
+  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed)
+    ? trimmed
+    : `http://${trimmed}`
+
+  try {
+    return new URL(normalizedInput).toString().replace(/\/$/, '')
+  } catch {
+    return fallback
+  }
+}
+
 export default defineConfig(({ envMode }) => {
   const env = loadEnv({ mode: envMode, prefixes: ['VITE_'] })
-  const serverUrl =
+  const serverUrl = normalizeServerUrl(
     process.env.VITE_REACT_APP_SERVER_URL ||
-    env.rawPublicVars.VITE_REACT_APP_SERVER_URL ||
-    'http://localhost:3000'
+      env.rawPublicVars.VITE_REACT_APP_SERVER_URL
+  )
 
   const isProd = envMode === 'production'
   const devProxy = Object.fromEntries(

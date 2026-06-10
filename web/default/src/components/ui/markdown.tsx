@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils'
 interface MarkdownProps {
   children: string
   className?: string
+  components?: Components
 }
 
-export function Markdown({ children, className }: MarkdownProps) {
+export function Markdown({ children, className, components }: MarkdownProps) {
   return (
     <div
       className={cn(
@@ -33,10 +34,10 @@ export function Markdown({ children, className }: MarkdownProps) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
         components={{
-          // 自定义组件渲染（可选）
-          a: ({ node, ...props }) => (
+          a: ({ node: _node, ...props }) => (
             <a {...props} target='_blank' rel='noopener noreferrer' />
           ),
+          ...components,
         }}
       >
         {children}

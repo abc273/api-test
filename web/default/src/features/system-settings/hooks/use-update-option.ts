@@ -20,6 +20,34 @@ const STATUS_RELATED_KEYS = [
   'general_setting.custom_currency_exchange_rate',
 ]
 
+const PRICING_RELATED_KEYS = new Set([
+  'ModelPrice',
+  'ModelRatio',
+  'CacheRatio',
+  'CreateCacheRatio',
+  'CompletionRatio',
+  'ImageRatio',
+  'AudioRatio',
+  'AudioCompletionRatio',
+  'GroupRatio',
+  'GroupGroupRatio',
+  'UserUsableGroups',
+  'AutoGroups',
+  'DefaultUseAutoGroup',
+  'group_ratio_setting.group_special_usable_group',
+  'billing_setting.billing_mode',
+  'billing_setting.billing_expr',
+  'billing_setting.output_tier_pricing',
+])
+
+function shouldRefreshPricing(key: string) {
+  return (
+    PRICING_RELATED_KEYS.has(key) ||
+    key.startsWith('billing_setting.') ||
+    key.startsWith('group_ratio_setting.')
+  )
+}
+
 export function useUpdateOption() {
   const queryClient = useQueryClient()
 
@@ -29,6 +57,13 @@ export function useUpdateOption() {
       if (data.success) {
         // Always refresh system-options
         queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        if (variables.key === 'ApiDocs') {
+          queryClient.invalidateQueries({ queryKey: ['api-docs'] })
+        }
+
+        if (shouldRefreshPricing(variables.key)) {
+          queryClient.invalidateQueries({ queryKey: ['pricing'] })
+        }
 
         // If updating frontend-display-related config, also refresh status
         if (STATUS_RELATED_KEYS.includes(variables.key)) {

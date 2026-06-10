@@ -75,11 +75,11 @@ func GetOptions(c *gin.Context) {
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
 		value := common.Interface2String(v)
-		isSensitiveKey := strings.HasSuffix(k, "Token") ||
-			strings.HasSuffix(k, "Secret") ||
-			strings.HasSuffix(k, "Key") ||
-			strings.HasSuffix(k, "secret") ||
-			strings.HasSuffix(k, "api_key")
+		lowerKey := strings.ToLower(k)
+		isSensitiveKey := strings.HasSuffix(lowerKey, "token") ||
+			strings.HasSuffix(lowerKey, "secret") ||
+			strings.HasSuffix(lowerKey, "key") ||
+			strings.HasSuffix(lowerKey, "api_key")
 		if isSensitiveKey && !isVisiblePublicKeyOption(k) {
 			continue
 		}

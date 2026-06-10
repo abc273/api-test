@@ -9,6 +9,7 @@ import {
 } from './section-registry.tsx'
 
 const defaultContentSettings: ContentSettings = {
+  ApiDocs: '',
   'console_setting.api_info': '[]',
   'console_setting.announcements': '[]',
   'console_setting.faq': '[]',
@@ -95,6 +96,7 @@ export function ContentSettings() {
   const activeSection = (params?.section ?? CONTENT_DEFAULT_SECTION) as
     | 'dashboard'
     | 'announcements'
+    | 'api-docs'
     | 'api-info'
     | 'faq'
     | 'uptime-kuma'

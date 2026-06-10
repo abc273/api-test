@@ -1,5 +1,5 @@
 {
-  "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.": "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.",
   "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).": "JSON map of model → tier list. Each tier can match resolution and video input, then set a token-based input price (USD per 1M tokens).",
+  "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.": "Match different output types to different input prices. Prices use USD per 1M tokens in the current token pricing mode.",
   "The exact input price depends on the matched output tier, such as resolution or whether video input is included.": "The exact input price depends on the matched output tier, such as resolution or whether video input is included."
 }

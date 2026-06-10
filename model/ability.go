@@ -13,6 +13,22 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+func resolveAbilityLookupModel(group string, model string) (string, error) {
+	for _, candidate := range buildAbilityLookupCandidates(model) {
+		var count int64
+		err := DB.Model(&Ability{}).
+			Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, candidate, true).
+			Count(&count).Error
+		if err != nil {
+			return "", err
+		}
+		if count > 0 {
+			return candidate, nil
+		}
+	}
+	return strings.TrimSpace(model), nil
+}
+
 type Ability struct {
 	Group     string  `json:"group" gorm:"type:varchar(64);primaryKey;autoIncrement:false"`
 	Model     string  `json:"model" gorm:"type:varchar(255);primaryKey;autoIncrement:false"`
@@ -89,14 +105,19 @@ func getPriority(group string, model string, retry int) (int, error) {
 }
 
 func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
-	maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = (?)", group, model, true, maxPrioritySubQuery)
+	resolvedModel, err := resolveAbilityLookupModel(group, model)
+	if err != nil {
+		return nil, err
+	}
+
+	maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, resolvedModel, true)
+	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = (?)", group, resolvedModel, true, maxPrioritySubQuery)
 	if retry != 0 {
-		priority, err := getPriority(group, model, retry)
+		priority, err := getPriority(group, resolvedModel, retry)
 		if err != nil {
 			return nil, err
 		} else {
-			channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, model, true, priority)
+			channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, resolvedModel, true, priority)
 		}
 	}
 
