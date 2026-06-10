@@ -2,7 +2,7 @@ FRONTEND_DIR = ./web/default
 FRONTEND_CLASSIC_DIR = ./web/classic
 BACKEND_DIR = .
 
-.PHONY: all build-frontend build-frontend-classic build-all-frontends start-backend dev dev-api dev-web dev-web-classic
+.PHONY: all build-frontend build-frontend-classic build-all-frontends start-backend dev dev-api dev-web dev-web-classic snapshot snapshot-list snapshot-show snapshot-diff snapshot-restore
 
 all: build-all-frontends start-backend
 
@@ -33,3 +33,18 @@ dev-web-classic:
 	@cd $(FRONTEND_CLASSIC_DIR) && bun install && bun run dev
 
 dev: dev-api dev-web
+
+snapshot:
+	@./scripts/git-snapshot create "$(or $(MSG),manual snapshot)"
+
+snapshot-list:
+	@./scripts/git-snapshot list
+
+snapshot-show:
+	@./scripts/git-snapshot show "$(or $(REF),latest)"
+
+snapshot-diff:
+	@./scripts/git-snapshot diff "$(or $(REF),latest)"
+
+snapshot-restore:
+	@./scripts/git-snapshot restore "$(or $(REF),latest)"

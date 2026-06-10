@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SELF="$(basename "$0")"
+TAG_PREFIX="snapshot"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/git-snapshot create [message...]
+  ./scripts/git-snapshot list
+  ./scripts/git-snapshot show <snapshot-ref|latest>
+  ./scripts/git-snapshot diff <snapshot-ref|latest>
+  ./scripts/git-snapshot restore <snapshot-ref|latest>
+
+Examples:
+  ./scripts/git-snapshot create "before payment webhook refactor"
+  ./scripts/git-snapshot list
+  ./scripts/git-snapshot show latest
+  ./scripts/git-snapshot diff snapshot/20260610-131500-before-payment-webhook-refactor
+  ./scripts/git-snapshot restore latest
+
+Notes:
+  - "create" stages all tracked and untracked files, then creates a snapshot commit.
+  - Every snapshot also gets a tag under "snapshot/...".
+  - "restore" automatically creates a safety snapshot of the current state first.
+EOF
+}
+
+fail() {
+  echo "[$SELF] $*" >&2
+  exit 1
+}
+
+ensure_repo() {
+  git rev-parse --show-toplevel >/dev/null 2>&1 || fail "current directory is not a git repository"
+}
+
+slugify() {
+  local raw="${1:-manual-snapshot}"
+  local slug
+  slug="$(printf '%s' "$raw" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-{2,}/-/g')"
+  slug="${slug:0:48}"
+  if [[ -z "$slug" ]]; then
+    slug="manual-snapshot"
+  fi
+  printf '%s\n' "$slug"
+}
+
+snapshot_tag_name() {
+  local message="$1"
+  local timestamp slug
+  timestamp="$(date '+%Y%m%d-%H%M%S')"
+  slug="$(slugify "$message")"
+  printf '%s/%s-%s\n' "$TAG_PREFIX" "$timestamp" "$slug"
+}
+
+latest_snapshot_tag() {
+  local latest
+  latest="$(git for-each-ref \
+    --sort=-creatordate \
+    --format='%(refname:short)' \
+    "refs/tags/${TAG_PREFIX}" \
+    | head -n 1)"
+
+  if [[ -z "$latest" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$latest"
+}
+
+resolve_snapshot_ref() {
+  local input="${1:-latest}"
+
+  if [[ "$input" == "latest" ]]; then
+    latest_snapshot_tag
+    return 0
+  fi
+
+  if git rev-parse --verify --quiet "refs/tags/$input" >/dev/null; then
+    printf '%s\n' "$input"
+    return 0
+  fi
+
+  if git rev-parse --verify --quiet "$input" >/dev/null; then
+    printf '%s\n' "$input"
+    return 0
+  fi
+
+  return 1
+}
+
+create_snapshot_internal() {
+  local message="$1"
+  local tag commit
+
+  git add -A || return 1
+  git commit --allow-empty -m "snapshot: ${message}" >/dev/null || return 1
+  commit="$(git rev-parse HEAD)" || return 1
+  tag="$(snapshot_tag_name "$message")"
+  git tag -a "$tag" -m "Snapshot: ${message}" "$commit" >/dev/null || return 1
+
+  printf '%s|%s\n' "$tag" "$commit"
+}
+
+create_snapshot() {
+  local message="${*:-manual snapshot}"
+  local result tag commit
+
+  result="$(create_snapshot_internal "$message")" || fail "failed to create snapshot"
+  tag="${result%%|*}"
+  commit="${result##*|}"
+
+  echo "Created snapshot"
+  echo "  tag:    $tag"
+  echo "  commit: $commit"
+  echo "  note:   $message"
+}
+
+list_snapshots() {
+  local output
+
+  output="$(git for-each-ref \
+    --sort=-creatordate \
+    --format='%(refname:short)|%(objectname:short)|%(creatordate:iso8601)|%(subject)' \
+    "refs/tags/${TAG_PREFIX}")"
+
+  if [[ -z "$output" ]]; then
+    echo "No snapshots found."
+    return 0
+  fi
+
+  echo "Snapshots:"
+  while IFS='|' read -r ref commit created subject; do
+    printf '  %-70s %-10s %s\n' "$ref" "$commit" "$created"
+    printf '    %s\n' "$subject"
+  done <<<"$output"
+}
+
+show_snapshot() {
+  local ref="${1:-}"
+  local resolved
+
+  [[ -n "$ref" ]] || fail "show requires a snapshot ref or 'latest'"
+  resolved="$(resolve_snapshot_ref "$ref")" || fail "snapshot not found: $ref"
+
+  echo "Snapshot: $resolved"
+  git --no-pager show --stat --decorate --summary "$resolved"
+}
+
+diff_snapshot() {
+  local ref="${1:-}"
+  local resolved
+
+  [[ -n "$ref" ]] || fail "diff requires a snapshot ref or 'latest'"
+  resolved="$(resolve_snapshot_ref "$ref")" || fail "snapshot not found: $ref"
+
+  echo "Diff from snapshot to current workspace: $resolved"
+  git --no-pager diff --stat "$resolved" --
+  echo
+  git --no-pager diff "$resolved" --
+}
+
+restore_snapshot() {
+  local ref="${1:-}"
+  local resolved safety_result safety_tag safety_commit target_commit
+
+  [[ -n "$ref" ]] || fail "restore requires a snapshot ref or 'latest'"
+  resolved="$(resolve_snapshot_ref "$ref")" || fail "snapshot not found: $ref"
+  target_commit="$(git rev-parse "$resolved^{commit}")"
+
+  safety_result="$(create_snapshot_internal "auto before restore to ${resolved}")" || fail "failed to create safety snapshot before restore"
+  safety_tag="${safety_result%%|*}"
+  safety_commit="${safety_result##*|}"
+
+  git reset --hard "$target_commit" >/dev/null || fail "failed to restore snapshot"
+
+  echo "Restored workspace to snapshot"
+  echo "  restored-from: $resolved"
+  echo "  target-commit: $target_commit"
+  echo "Safety snapshot created before restore"
+  echo "  tag:    $safety_tag"
+  echo "  commit: $safety_commit"
+}
+
+main() {
+  ensure_repo
+
+  local command="${1:-}"
+  shift || true
+
+  case "$command" in
+    create)
+      create_snapshot "$@"
+      ;;
+    list)
+      list_snapshots
+      ;;
+    show)
+      show_snapshot "${1:-}"
+      ;;
+    diff)
+      diff_snapshot "${1:-}"
+      ;;
+    restore)
+      restore_snapshot "${1:-}"
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      fail "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"
