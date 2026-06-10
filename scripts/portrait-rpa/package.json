@@ -1,0 +1,11 @@
+{
+  "name": "new-api-portrait-rpa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node volc-portrait-rpa.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.57.0"
+  }
+}
