@@ -17,12 +17,12 @@ export const AI_APPLICATIONS = [
 
 // Hero section - AI Models (Right side)
 export const AI_MODELS = [
-  'Qwen.Color',
+  'DeepSeek.Color',
+  'Doubao.Color',
   'DeepSeek.Color',
   'Doubao.Color',
   'OpenAI',
-  'Claude.Color',
-  'Gemini.Color',
+  'DeepSeek.Color',
 ] as const
 
 // Hero section - Gateway Features

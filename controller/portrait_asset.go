@@ -29,13 +29,17 @@ type portraitAssetCreateRequest struct {
 }
 
 type portraitAssetOfficialCreateRequest struct {
-	Name string `json:"name"`
+	Name           string `json:"name"`
+	CallbackURL    string `json:"callback_url"`
+	ExternalUserID string `json:"external_user_id"`
+	FolderID       int    `json:"folder_id"`
 }
 
 type portraitAssetOfficialAssetRequest struct {
 	AssetURL  string `json:"asset_url"`
 	AssetType string `json:"asset_type"`
 	Name      string `json:"name"`
+	FolderID  int    `json:"folder_id"`
 }
 
 type portraitAssetOfficialUploadResponse struct {
@@ -218,14 +222,24 @@ func GetOfficialPortraitAssetConfig(c *gin.Context) {
 
 func ListOfficialPortraitAssetJobs(c *gin.Context) {
 	userId := c.GetInt("id")
+	externalUserID, err := getExternalUserIDFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
-	jobs, err := model.GetUserOfficialPortraitAssetJobs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	folderID, filterFolderID, err := getFolderIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	jobs, err := model.GetUserOfficialPortraitAssetJobsWithFolder(userId, externalUserID, folderID, filterFolderID, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	decorateOfficialPortraitAssetJobsResponse(c, jobs)
-	total, _ := model.CountUserOfficialPortraitAssetJobs(userId)
+	total, _ := model.CountUserOfficialPortraitAssetJobsWithFolder(userId, externalUserID, folderID, filterFolderID)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(jobs)
 	common.ApiSuccess(c, pageInfo)
@@ -242,11 +256,26 @@ func CreateOfficialPortraitAssetJob(c *gin.Context) {
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
+	req.CallbackURL = strings.TrimSpace(req.CallbackURL)
+	var err error
+	req.ExternalUserID, err = normalizeExternalUserIDInput(req.ExternalUserID)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	if len([]rune(req.Name)) > 50 {
 		common.ApiErrorMsg(c, "资产名称不能超过 50 个字符")
 		return
 	}
-	job, err := model.CreateOfficialPortraitAssetJob(c.GetInt("id"), req.Name, service.GetVolcPortraitProjectName())
+	if req.FolderID < 0 {
+		common.ApiErrorMsg(c, "folder_id 不能小于 0")
+		return
+	}
+	if req.CallbackURL != "" && !isPublicHTTPURL(req.CallbackURL) {
+		common.ApiErrorMsg(c, "回调地址必须是有效的 http/https URL")
+		return
+	}
+	job, err := model.CreateOfficialPortraitAssetJob(c.GetInt("id"), req.Name, service.GetVolcPortraitProjectName(), req.CallbackURL, req.ExternalUserID, req.FolderID)
 	if err != nil {
 		if errors.Is(err, model.ErrPortraitAssetActiveJob) {
 			common.ApiErrorMsg(c, "你已有进行中的官方真人资产任务，请完成后再创建")
@@ -400,6 +429,16 @@ func SubmitOfficialPortraitAsset(c *gin.Context) {
 	req.AssetURL = strings.TrimSpace(req.AssetURL)
 	req.AssetType = strings.TrimSpace(req.AssetType)
 	req.Name = strings.TrimSpace(req.Name)
+	if req.FolderID < 0 {
+		common.ApiErrorMsg(c, "folder_id 不能小于 0")
+		return
+	}
+	if req.FolderID > 0 {
+		if _, err := model.GetUserPortraitAssetFolderByIDForExternalUser(c.GetInt("id"), req.FolderID, model.PortraitAssetFolderKindOfficial, job.ExternalUserID, true); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	if !isPublicHTTPURL(req.AssetURL) {
 		common.ApiErrorMsg(c, "请填写可被火山访问的 http/https 素材 URL")
 		return
@@ -414,12 +453,12 @@ func SubmitOfficialPortraitAsset(c *gin.Context) {
 		common.ApiErrorMsg(c, "请先完成真人认证")
 		return
 	}
-	assetID, err := service.CreateVolcPortraitAsset(job.VolcGroupID, req.AssetURL, req.AssetType, req.Name, job.ProjectName)
+	assetID, err := createOfficialPortraitAssetWithGroupRecovery(job, req.AssetURL, req.AssetType, req.Name)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if err := model.SetOfficialPortraitAssetUpload(job, assetID, req.AssetURL, req.AssetType); err != nil {
+	if err := model.SetOfficialPortraitAssetUpload(job, assetID, req.AssetURL, req.AssetType, req.FolderID); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -434,7 +473,12 @@ func SyncOfficialPortraitAssetJob(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	job, err := model.GetUserOfficialPortraitAssetJobByID(c.GetInt("id"), id)
+	externalUserID, filterExternalUserID, err := getExternalUserIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	job, err := model.GetUserOfficialPortraitAssetJobByIDForExternalUser(c.GetInt("id"), id, externalUserID, filterExternalUserID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -445,6 +489,24 @@ func SyncOfficialPortraitAssetJob(c *gin.Context) {
 	}
 	decorateOfficialPortraitAssetJobResponse(c, job)
 	common.ApiSuccess(c, job)
+}
+
+func DeleteOfficialPortraitAssetJob(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	externalUserID, filterExternalUserID, err := getExternalUserIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	if err := model.DeleteUserOfficialPortraitAssetJobForExternalUser(c.GetInt("id"), id, externalUserID, filterExternalUserID); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func ConfirmOfficialPortraitAsset(c *gin.Context) {
@@ -551,11 +613,7 @@ func OfficialPortraitAssetCallback(c *gin.Context) {
 			_ = model.SetOfficialPortraitAssetGroup(job, groupID)
 		}
 	}
-	redirectURL := "/portrait-assets-official?job_id=" + strconv.Itoa(job.Id)
-	if resultCode != "" {
-		redirectURL += "&result_code=" + url.QueryEscape(resultCode)
-	}
-	c.Redirect(http.StatusFound, redirectURL)
+	c.Redirect(http.StatusFound, buildOfficialPortraitFinalRedirectURL(job, resultCode))
 }
 
 func startOfficialPortraitValidationSession(c *gin.Context, job *model.PortraitAssetJob) error {
@@ -601,6 +659,73 @@ func syncOfficialPortraitAssetJob(job *model.PortraitAssetJob) error {
 		}
 	}
 	return nil
+}
+
+func createOfficialPortraitAssetWithGroupRecovery(job *model.PortraitAssetJob, assetURL string, assetType string, name string) (string, error) {
+	if job == nil {
+		return "", errors.New("portrait asset job is nil")
+	}
+
+	assetID, err := service.CreateVolcPortraitAsset(job.VolcGroupID, assetURL, assetType, name, job.ProjectName)
+	if !service.IsVolcPortraitGroupNotFoundError(err) {
+		return assetID, err
+	}
+
+	if recoverErr := refreshOfficialPortraitAssetGroup(job); recoverErr != nil {
+		markOfficialPortraitGroupExpired(job)
+		return "", recoverErr
+	}
+
+	assetID, err = service.CreateVolcPortraitAsset(job.VolcGroupID, assetURL, assetType, name, job.ProjectName)
+	if service.IsVolcPortraitGroupNotFoundError(err) {
+		markOfficialPortraitGroupExpired(job)
+		return "", errors.New("真人认证分组已失效，请重新生成人脸认证链接后再上传素材")
+	}
+	return assetID, err
+}
+
+func refreshOfficialPortraitAssetGroup(job *model.PortraitAssetJob) error {
+	if job == nil {
+		return errors.New("portrait asset job is nil")
+	}
+	if job.ValidateResultCode != "10000" || strings.TrimSpace(job.ValidateToken) == "" {
+		return errors.New("真人认证分组已失效，请重新生成人脸认证链接后再上传素材")
+	}
+
+	previousGroupID := model.NormalizePortraitAssetID(job.VolcGroupID)
+	job.VolcGroupID = ""
+	job.UpdatedTime = common.GetTimestamp()
+	if err := model.DB.Model(job).Select("volc_group_id", "updated_time").Updates(map[string]any{
+		"volc_group_id": "",
+		"updated_time":  job.UpdatedTime,
+	}).Error; err != nil {
+		return err
+	}
+
+	if err := syncOfficialPortraitAssetJob(job); err != nil {
+		return err
+	}
+	if model.NormalizePortraitAssetID(job.VolcGroupID) == "" ||
+		model.NormalizePortraitAssetID(job.VolcGroupID) == previousGroupID {
+		return errors.New("真人认证分组已失效，请重新生成人脸认证链接后再上传素材")
+	}
+	return nil
+}
+
+func markOfficialPortraitGroupExpired(job *model.PortraitAssetJob) {
+	if job == nil {
+		return
+	}
+	job.VolcGroupID = ""
+	job.Status = model.PortraitAssetStatusExpired
+	job.ErrorMessage = "真人认证分组已失效，请重新生成人脸认证链接后再上传素材"
+	job.UpdatedTime = common.GetTimestamp()
+	_ = model.DB.Model(job).Select("volc_group_id", "status", "error_message", "updated_time").Updates(map[string]any{
+		"volc_group_id": "",
+		"status":        model.PortraitAssetStatusExpired,
+		"error_message": job.ErrorMessage,
+		"updated_time":  job.UpdatedTime,
+	}).Error
 }
 
 func decorateOfficialPortraitAssetJobsResponse(c *gin.Context, jobs []*model.PortraitAssetJob) {
@@ -658,6 +783,34 @@ func buildOfficialPortraitCallbackURL(c *gin.Context, job *model.PortraitAssetJo
 	)
 }
 
+func buildOfficialPortraitFinalRedirectURL(job *model.PortraitAssetJob, resultCode string) string {
+	jobID := ""
+	if job != nil {
+		jobID = strconv.Itoa(job.Id)
+	}
+	redirectURL := "/portrait-assets-official?job_id=" + url.QueryEscape(jobID)
+	if resultCode != "" {
+		redirectURL += "&result_code=" + url.QueryEscape(resultCode)
+	}
+	if job == nil || strings.TrimSpace(job.CallbackURL) == "" {
+		return redirectURL
+	}
+	parsed, err := url.Parse(strings.TrimSpace(job.CallbackURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return redirectURL
+	}
+	query := parsed.Query()
+	query.Set("job_id", jobID)
+	if job != nil && strings.TrimSpace(job.ExternalUserID) != "" {
+		query.Set("external_user_id", strings.TrimSpace(job.ExternalUserID))
+	}
+	if resultCode != "" {
+		query.Set("result_code", resultCode)
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
 func buildOfficialPortraitPreviewURL(c *gin.Context, job *model.PortraitAssetJob) string {
 	if job == nil {
 		return ""
@@ -680,6 +833,49 @@ func officialPortraitAssetState(job *model.PortraitAssetJob) string {
 
 func officialPortraitAssetPreviewState(job *model.PortraitAssetJob) string {
 	return common.GenerateHMAC(fmt.Sprintf("portrait-official-preview:%d:%d:%d", job.Id, job.UserId, job.CreatedTime))
+}
+
+func normalizeExternalUserIDInput(externalUserID string) (string, error) {
+	externalUserID = model.NormalizeExternalUserID(externalUserID)
+	if len([]rune(externalUserID)) > model.ExternalUserIDMaxRunes {
+		return "", fmt.Errorf("external_user_id 不能超过 %d 个字符", model.ExternalUserIDMaxRunes)
+	}
+	return externalUserID, nil
+}
+
+func getExternalUserIDFromQuery(c *gin.Context) (string, error) {
+	return normalizeExternalUserIDInput(c.Query("external_user_id"))
+}
+
+func getExternalUserIDFilterFromQuery(c *gin.Context) (string, bool, error) {
+	raw, ok := c.GetQuery("external_user_id")
+	if !ok {
+		return "", false, nil
+	}
+	externalUserID, err := normalizeExternalUserIDInput(raw)
+	if err != nil {
+		return "", false, err
+	}
+	return externalUserID, true, nil
+}
+
+func getFolderIDFilterFromQuery(c *gin.Context) (int, bool, error) {
+	raw, ok := c.GetQuery("folder_id")
+	if !ok {
+		return 0, false, nil
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false, fmt.Errorf("folder_id 不能为空")
+	}
+	folderID, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, false, fmt.Errorf("folder_id 必须是整数")
+	}
+	if folderID < 0 {
+		return 0, false, fmt.Errorf("folder_id 不能小于 0")
+	}
+	return folderID, true, nil
 }
 
 func getPortraitAssetPublicBaseURL(c *gin.Context) string {

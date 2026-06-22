@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 
 interface CounterProps {
   end: number
@@ -70,13 +69,11 @@ interface StatsProps {
 }
 
 export function Stats(_props: StatsProps) {
-  const { t } = useTranslation()
-
   const stats = [
-    { end: 100, suffix: 'M+', label: t('requests served') },
-    { end: 50, suffix: '+', label: t('AI models supported') },
-    { end: 99.9, suffix: '%', label: t('uptime'), decimals: 1 },
-    { end: 10, suffix: 'K+', label: t('active users') },
+    { end: 1, label: '统一接入地址' },
+    { end: 4, label: '核心工作流' },
+    { end: 2, label: '资产模式' },
+    { end: 1, label: '公开文档中心' },
   ]
 
   return (

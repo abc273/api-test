@@ -10,6 +10,7 @@ export interface VirtualPortraitAssetConfig {
 export interface VirtualPortraitAssetGroup {
   id: number
   user_id: number
+  external_user_id?: string
   name: string
   description?: string
   project_name: string
@@ -23,6 +24,8 @@ export interface VirtualPortraitAssetGroup {
 export interface VirtualPortraitAsset {
   id: number
   user_id: number
+  external_user_id?: string
+  folder_id: number
   group_id: number
   name: string
   asset_type: 'Image' | 'Video' | 'Audio'

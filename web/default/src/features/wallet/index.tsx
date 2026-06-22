@@ -4,6 +4,7 @@ import { getSelf } from '@/lib/api'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { SectionPageLayout } from '@/components/layout'
+import { getWalletSummary, isApiSuccess } from './api'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
@@ -29,6 +30,7 @@ import {
 } from './lib'
 import type {
   UserWalletData,
+  WalletSummary,
   PaymentMethod,
   PresetAmount,
   CreemProduct,
@@ -41,6 +43,7 @@ interface WalletProps {
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const [user, setUser] = useState<UserWalletData | null>(null)
+  const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
@@ -88,9 +91,23 @@ export function Wallet(props: WalletProps) {
   const fetchUser = useCallback(async () => {
     try {
       setUserLoading(true)
-      const response = await getSelf()
-      if (response.success && response.data) {
-        setUser(response.data as UserWalletData)
+      const [userResult, summaryResult] = await Promise.allSettled([
+        getSelf(),
+        getWalletSummary(),
+      ])
+      if (
+        userResult.status === 'fulfilled' &&
+        userResult.value.success &&
+        userResult.value.data
+      ) {
+        setUser(userResult.value.data as UserWalletData)
+      }
+      if (
+        summaryResult.status === 'fulfilled' &&
+        isApiSuccess(summaryResult.value) &&
+        summaryResult.value.data
+      ) {
+        setWalletSummary(summaryResult.value.data)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -242,7 +259,11 @@ export function Wallet(props: WalletProps) {
           <div className='grid gap-6 lg:grid-cols-3'>
             {/* Left Column - Stats & Recharge */}
             <div className='space-y-6 lg:col-span-2'>
-              <WalletStatsCard user={user} loading={userLoading} />
+              <WalletStatsCard
+                user={user}
+                summary={walletSummary}
+                loading={userLoading}
+              />
               <RechargeFormCard
                 topupInfo={topupInfo}
                 presetAmounts={presetAmounts}

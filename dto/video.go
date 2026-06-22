@@ -12,6 +12,7 @@ type VideoRequest struct {
 	N              int            `json:"n,omitempty" example:"1"`                                                                                                                                               // Number of videos to generate
 	ResponseFormat string         `json:"response_format,omitempty" example:"url"`                                                                                                                               // Response format
 	User           string         `json:"user,omitempty" example:"user-1234"`                                                                                                                                    // User identifier
+	ExternalUserID string         `json:"external_user_id,omitempty" example:"customer-user-123"`                                                                                                                // Customer-side user identifier for portrait asset isolation
 	Metadata       map[string]any `json:"metadata,omitempty"`                                                                                                                                                    // Vendor-specific/custom params (e.g. negative_prompt, style, quality_level, etc.)
 }
 

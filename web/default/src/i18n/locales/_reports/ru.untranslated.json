@@ -99,6 +99,9 @@
   "VolcEngine": "VolcEngine",
   "WeChat": "WeChat",
   "whsec_xxx": "whsec_xxx",
+  "Filter by external_user_id": "按 external_user_id 筛选",
+  "Asset URI copied": "资产 URI 已复制",
+  "This will delete the selected portrait asset record: {{name}}": "将删除所选人像资产记录：{{name}}",
   "Xinference": "Xinference",
   "Xunfei": "Xunfei",
   "Zhipu V4": "Zhipu V4"

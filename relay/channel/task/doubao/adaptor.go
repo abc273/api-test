@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -210,6 +211,43 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, req
 	return channel.DoTaskApiRequest(a, c, info, requestBody)
 }
 
+func (a *TaskAdaptor) DeleteTask(c *gin.Context, info *relaycommon.RelayInfo, originTask *model.Task) *dto.TaskError {
+	if originTask == nil {
+		return service.TaskErrorWrapperLocal(fmt.Errorf("task is required"), "invalid_task", http.StatusBadRequest)
+	}
+	upstreamTaskID := strings.TrimSpace(originTask.GetUpstreamTaskID())
+	if upstreamTaskID == "" {
+		return service.TaskErrorWrapperLocal(fmt.Errorf("upstream task id is empty"), "invalid_upstream_task_id", http.StatusBadRequest)
+	}
+
+	deleteURL := fmt.Sprintf("%s/api/v3/contents/generations/tasks/%s", a.baseURL, url.PathEscape(upstreamTaskID))
+	req, err := http.NewRequest(http.MethodDelete, deleteURL, nil)
+	if err != nil {
+		return service.TaskErrorWrapper(err, "build_delete_request_failed", http.StatusInternalServerError)
+	}
+	if err = a.BuildRequestHeader(c, req, info); err != nil {
+		return service.TaskErrorWrapper(err, "build_delete_request_header_failed", http.StatusInternalServerError)
+	}
+	client, err := service.GetHttpClientWithProxy(info.ChannelSetting.Proxy)
+	if err != nil {
+		return service.TaskErrorWrapper(err, "build_delete_http_client_failed", http.StatusInternalServerError)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return service.TaskErrorWrapper(err, "delete_task_request_failed", http.StatusInternalServerError)
+	}
+	if resp == nil {
+		return service.TaskErrorWrapperLocal(fmt.Errorf("delete task response is nil"), "delete_task_response_nil", http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "delete_task_failed", resp.StatusCode)
+	}
+	return nil
+}
+
 // DoResponse handles upstream response, returns taskID etc.
 func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (taskID string, taskData []byte, taskErr *dto.TaskError) {
 	responseBody, err := io.ReadAll(resp.Body)
@@ -284,22 +322,16 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 		Content: []ContentItem{},
 	}
 
-	// Add images if present
-	if req.HasImage() {
-		for _, imgURL := range req.Images {
-			r.Content = append(r.Content, ContentItem{
-				Type: "image_url",
-				Role: "reference_image",
-				ImageURL: &MediaURL{
-					URL: imgURL,
-				},
-			})
-		}
-	}
+	imageItems := buildReferenceImageItems(req.Images)
 
 	metadata := req.Metadata
 	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+	if len(imageItems) > 0 {
+		// Keep explicit metadata.content ordering stable. Legacy top-level images
+		// are appended after explicit media so "图1/图2/图3" numbering does not shift.
+		r.Content = append(r.Content, imageItems...)
 	}
 	if r.Resolution == "" && strings.TrimSpace(req.Resolution) != "" {
 		r.Resolution = strings.TrimSpace(req.Resolution)
@@ -315,23 +347,21 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 	}
 	r.Resolution = service.ResolveDedicatedVideoSuperResolutionSourceResolution(req.Model, r.Resolution)
 
-	if assetURI, err := resolvePortraitAssetURI(req, info); err != nil {
+	externalUserID, err := resolveRequestExternalUserID(req)
+	if err != nil {
 		return nil, err
-	} else if assetURI != "" {
-		r.Content = append(r.Content, ContentItem{
-			Type: "image_url",
-			Role: "reference_image",
-			ImageURL: &MediaURL{
-				URL: assetURI,
-			},
-		})
+	}
+	if portraitAssetItem, err := resolvePortraitAssetContentItem(req, info, externalUserID); err != nil {
+		return nil, err
+	} else if portraitAssetItem != nil {
+		r.Content = append(r.Content, *portraitAssetItem)
 	}
 
 	userID := 0
 	if info != nil {
 		userID = info.UserId
 	}
-	if err := validatePortraitAssetReferences(userID, r.Content); err != nil {
+	if err := validatePortraitAssetReferences(userID, externalUserID, r.Content); err != nil {
 		return nil, err
 	}
 
@@ -350,9 +380,49 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 	return &r, nil
 }
 
-func resolvePortraitAssetURI(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo) (string, error) {
+func buildReferenceImageItems(images []string) []ContentItem {
+	items := make([]ContentItem, 0, len(images))
+	for _, imgURL := range images {
+		items = append(items, ContentItem{
+			Type: "image_url",
+			Role: "reference_image",
+			ImageURL: &MediaURL{
+				URL: imgURL,
+			},
+		})
+	}
+	return items
+}
+
+func resolveRequestExternalUserID(req *relaycommon.TaskSubmitReq) (string, error) {
+	if req == nil {
+		return "", nil
+	}
+	if externalUserID := model.NormalizeExternalUserID(req.ExternalUserID); externalUserID != "" {
+		return validateRequestExternalUserID(externalUserID)
+	}
 	if req.Metadata == nil {
 		return "", nil
+	}
+	if raw, ok := req.Metadata["external_user_id"]; ok {
+		if externalUserID, ok := raw.(string); ok {
+			return validateRequestExternalUserID(externalUserID)
+		}
+	}
+	return "", nil
+}
+
+func validateRequestExternalUserID(externalUserID string) (string, error) {
+	externalUserID = model.NormalizeExternalUserID(externalUserID)
+	if len([]rune(externalUserID)) > model.ExternalUserIDMaxRunes {
+		return "", fmt.Errorf("external_user_id must not exceed %d characters", model.ExternalUserIDMaxRunes)
+	}
+	return externalUserID, nil
+}
+
+func resolvePortraitAssetContentItem(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo, externalUserID string) (*ContentItem, error) {
+	if req.Metadata == nil {
+		return nil, nil
 	}
 	userID := 0
 	if info != nil {
@@ -361,30 +431,67 @@ func resolvePortraitAssetURI(req *relaycommon.TaskSubmitReq, info *relaycommon.R
 	if raw, ok := req.Metadata["portrait_asset_id"]; ok {
 		id, ok := parsePortraitAssetJobID(raw)
 		if !ok || id <= 0 {
-			return "", fmt.Errorf("metadata.portrait_asset_id is invalid")
+			return nil, fmt.Errorf("metadata.portrait_asset_id is invalid")
 		}
-		job, err := model.GetReadyUserPortraitAssetJob(userID, id)
+		job, err := model.GetReadyUserPortraitAssetJobForExternalUser(userID, id, externalUserID)
+		if err != nil && model.NormalizeExternalUserID(externalUserID) == "" {
+			job, err = model.GetReadyUserPortraitAssetJobByIDIgnoringExternalUser(userID, id)
+		}
 		if err != nil {
-			return "", fmt.Errorf("portrait asset %d is not ready or not bound to current user", id)
+			return nil, fmt.Errorf("portrait asset %d is not ready or not bound to current user", id)
 		}
-		return model.PortraitAssetURI(job.AssetID), nil
+		item := buildPortraitAssetContentItem(model.PortraitAssetURI(job.AssetID), job.AssetType)
+		return &item, nil
 	}
 	if raw, ok := req.Metadata["asset_id"]; ok {
 		assetID, ok := raw.(string)
 		if !ok {
-			return "", fmt.Errorf("metadata.asset_id must be a string")
+			return nil, fmt.Errorf("metadata.asset_id must be a string")
 		}
 		assetID = model.NormalizePortraitAssetID(assetID)
 		if assetID == "" {
-			return "", nil
+			return nil, nil
 		}
-		job, err := model.GetReadyUserPortraitAssetByAssetID(userID, assetID)
+		job, err := model.GetReadyUserPortraitAssetByAssetIDForExternalUser(userID, assetID, externalUserID)
+		if err != nil && model.NormalizeExternalUserID(externalUserID) == "" {
+			job, err = model.GetReadyUserPortraitAssetByAssetIDIgnoringExternalUser(userID, assetID)
+		}
 		if err != nil {
-			return "", fmt.Errorf("portrait asset %s is not bound to current user", assetID)
+			return nil, fmt.Errorf("portrait asset %s is not ready or not bound to current user", assetID)
 		}
-		return model.PortraitAssetURI(job.AssetID), nil
+		item := buildPortraitAssetContentItem(model.PortraitAssetURI(job.AssetID), job.AssetType)
+		return &item, nil
 	}
-	return "", nil
+	return nil, nil
+}
+
+func buildPortraitAssetContentItem(assetURI string, assetType string) ContentItem {
+	normalizedType := strings.TrimSpace(strings.ToLower(assetType))
+	switch normalizedType {
+	case "video":
+		return ContentItem{
+			Type: "video_url",
+			Role: "reference_video",
+			VideoURL: &MediaURL{
+				URL: assetURI,
+			},
+		}
+	case "audio":
+		return ContentItem{
+			Type: "audio_url",
+			AudioURL: &MediaURL{
+				URL: assetURI,
+			},
+		}
+	default:
+		return ContentItem{
+			Type: "image_url",
+			Role: "reference_image",
+			ImageURL: &MediaURL{
+				URL: assetURI,
+			},
+		}
+	}
 }
 
 func parsePortraitAssetJobID(raw any) (int, bool) {
@@ -403,12 +510,9 @@ func parsePortraitAssetJobID(raw any) (int, bool) {
 	}
 }
 
-func validatePortraitAssetReferences(userId int, content []ContentItem) error {
+func validatePortraitAssetReferences(userId int, externalUserID string, content []ContentItem) error {
 	for _, item := range content {
-		if item.ImageURL == nil {
-			continue
-		}
-		url := strings.TrimSpace(item.ImageURL.URL)
+		url := strings.TrimSpace(contentItemMediaURL(item))
 		if !strings.HasPrefix(url, "asset://") {
 			continue
 		}
@@ -416,11 +520,24 @@ func validatePortraitAssetReferences(userId int, content []ContentItem) error {
 		if assetID == "" {
 			return fmt.Errorf("portrait asset reference is empty")
 		}
-		if _, err := model.GetReadyUserPortraitAssetByAssetID(userId, assetID); err != nil {
+		if err := service.ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID); err != nil {
 			return fmt.Errorf("portrait asset %s is not bound to current user", assetID)
 		}
 	}
 	return nil
+}
+
+func contentItemMediaURL(item ContentItem) string {
+	if item.ImageURL != nil {
+		return item.ImageURL.URL
+	}
+	if item.VideoURL != nil {
+		return item.VideoURL.URL
+	}
+	if item.AudioURL != nil {
+		return item.AudioURL.URL
+	}
+	return ""
 }
 
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
@@ -452,6 +569,13 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = "100%"
 		taskResult.Reason = resTask.Error.Message
+	case "cancelled":
+		taskResult.Status = model.TaskStatusCancelled
+		taskResult.Progress = "100%"
+	case "expired":
+		taskResult.Status = model.TaskStatusFailure
+		taskResult.Progress = "100%"
+		taskResult.Reason = "task expired"
 	default:
 		// Unknown status, treat as processing
 		taskResult.Status = model.TaskStatusInProgress
@@ -500,7 +624,7 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 		openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
 	}
 	openAIVideo.CreatedAt = originTask.CreatedAt
-	if originTask.Status == model.TaskStatusSuccess || originTask.Status == model.TaskStatusFailure {
+	if originTask.Status == model.TaskStatusSuccess || originTask.Status == model.TaskStatusFailure || originTask.Status == model.TaskStatusCancelled {
 		openAIVideo.CompletedAt = originTask.UpdatedAt
 	}
 	openAIVideo.Model = originTask.Properties.OriginModelName

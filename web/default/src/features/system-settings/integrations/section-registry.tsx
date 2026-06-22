@@ -37,8 +37,7 @@ const INTEGRATIONS_SECTIONS = [
           AlipayPublicKey: settings.AlipayPublicKey,
           AlipaySandbox: settings.AlipaySandbox,
           AlipayReturnUrl: settings.AlipayReturnUrl,
-          AlipaySubscriptionReturnUrl:
-            settings.AlipaySubscriptionReturnUrl,
+          AlipaySubscriptionReturnUrl: settings.AlipaySubscriptionReturnUrl,
           CreemApiKey: settings.CreemApiKey,
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,
@@ -160,7 +159,7 @@ const INTEGRATIONS_SECTIONS = [
             settings['video_super_resolution.output_quality_mode'] === 'master'
               ? 'master'
               : settings['video_super_resolution.output_quality_mode'] ===
-                    'compatible'
+                  'compatible'
                 ? 'compatible'
                 : 'balanced',
           tosPublicBaseURL:
@@ -169,8 +168,7 @@ const INTEGRATIONS_SECTIONS = [
           tosRegion: settings['video_super_resolution.tos_region'],
           tosAccessKey: settings['video_super_resolution.tos_access_key'],
           tosSecretKey: settings['video_super_resolution.tos_secret_key'],
-          tosSessionToken:
-            settings['video_super_resolution.tos_session_token'],
+          tosSessionToken: settings['video_super_resolution.tos_session_token'],
           tosPresignExpires:
             settings['video_super_resolution.tos_presign_expires'],
         }}

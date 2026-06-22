@@ -12,11 +12,14 @@ export type OfficialPortraitAssetStatus =
 export interface OfficialPortraitAssetJob {
   id: number
   user_id: number
+  external_user_id?: string
+  folder_id: number
   name: string
   source: 'official'
   status: OfficialPortraitAssetStatus
   invite_url?: string
   validate_result_code?: string
+  callback_url?: string
   volc_group_id?: string
   asset_id?: string
   asset_status?: string

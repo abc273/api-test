@@ -218,6 +218,18 @@ export interface UserWalletData {
 }
 
 /**
+ * Aggregated wallet usage data
+ */
+export interface WalletSummary {
+  /** Gross quota ever charged */
+  used_quota: number
+  /** Quota returned by failed or over-reserved tasks */
+  refunded_quota: number
+  /** Net quota usage after refunds */
+  actual_used_quota: number
+}
+
+/**
  * Topup record status
  */
 export type TopupStatus = 'success' | 'pending' | 'expired'

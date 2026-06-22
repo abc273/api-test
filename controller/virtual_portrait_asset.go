@@ -15,9 +15,11 @@ import (
 )
 
 type virtualPortraitAssetCreateRequest struct {
-	Name      string `json:"name"`
-	AssetURL  string `json:"asset_url"`
-	AssetType string `json:"asset_type"`
+	Name           string `json:"name"`
+	AssetURL       string `json:"asset_url"`
+	AssetType      string `json:"asset_type"`
+	ExternalUserID string `json:"external_user_id"`
+	FolderID       int    `json:"folder_id"`
 }
 
 func GetVirtualPortraitAssetConfig(c *gin.Context) {
@@ -28,7 +30,12 @@ func GetVirtualPortraitAssetConfig(c *gin.Context) {
 }
 
 func GetUserVirtualPortraitAssetGroup(c *gin.Context) {
-	group, err := model.GetUserVirtualPortraitAssetGroup(c.GetInt("id"))
+	externalUserID, err := getExternalUserIDFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	group, err := model.GetUserVirtualPortraitAssetGroupForExternalUser(c.GetInt("id"), externalUserID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		common.ApiSuccess(c, nil)
 		return
@@ -42,14 +49,25 @@ func GetUserVirtualPortraitAssetGroup(c *gin.Context) {
 
 func ListUserVirtualPortraitAssets(c *gin.Context) {
 	userId := c.GetInt("id")
+	externalUserID, err := getExternalUserIDFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
-	assets, err := model.GetUserVirtualPortraitAssets(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	folderID, filterFolderID, err := getFolderIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	assets, err := model.GetUserVirtualPortraitAssetsWithFolderForExternalUser(userId, externalUserID, externalUserID != "", folderID, filterFolderID, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	service.SyncUserVirtualPortraitAssetsForDisplay(assets)
 	decorateUserVirtualPortraitAssetsResponse(c, assets)
-	total, _ := model.CountUserVirtualPortraitAssets(userId)
+	total, _ := model.CountUserVirtualPortraitAssetsWithFolderForExternalUser(userId, externalUserID, externalUserID != "", folderID, filterFolderID)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(assets)
 	common.ApiSuccess(c, pageInfo)
@@ -74,9 +92,19 @@ func CreateUserVirtualPortraitAsset(c *gin.Context) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.AssetURL = strings.TrimSpace(req.AssetURL)
 	req.AssetType = strings.TrimSpace(req.AssetType)
+	var err error
+	req.ExternalUserID, err = normalizeExternalUserIDInput(req.ExternalUserID)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 
 	if len([]rune(req.Name)) > 50 {
 		common.ApiErrorMsg(c, "资产名称不能超过 50 个字符")
+		return
+	}
+	if req.FolderID < 0 {
+		common.ApiErrorMsg(c, "folder_id 不能小于 0")
 		return
 	}
 	if !isPublicHTTPURL(req.AssetURL) {
@@ -90,7 +118,7 @@ func CreateUserVirtualPortraitAsset(c *gin.Context) {
 		return
 	}
 
-	asset, err := service.CreateUserVirtualPortraitAsset(c.GetInt("id"), req.Name, req.AssetURL, assetType)
+	asset, err := service.CreateUserVirtualPortraitAsset(c.GetInt("id"), req.ExternalUserID, req.Name, req.AssetURL, assetType, req.FolderID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -105,13 +133,36 @@ func SyncUserVirtualPortraitAsset(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	asset, err := service.SyncUserVirtualPortraitAsset(c.GetInt("id"), id)
+	externalUserID, filterExternalUserID, err := getExternalUserIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	asset, err := service.SyncUserVirtualPortraitAssetForExternalUser(c.GetInt("id"), id, externalUserID, filterExternalUserID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	decorateUserVirtualPortraitAssetResponse(c, asset)
 	common.ApiSuccess(c, asset)
+}
+
+func DeleteUserVirtualPortraitAsset(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	externalUserID, filterExternalUserID, err := getExternalUserIDFilterFromQuery(c)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	if err := model.DeleteUserVirtualPortraitAssetForExternalUser(c.GetInt("id"), id, externalUserID, filterExternalUserID); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func UserVirtualPortraitAssetPreview(c *gin.Context) {

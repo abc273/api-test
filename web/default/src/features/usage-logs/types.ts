@@ -1,7 +1,6 @@
 /**
  * Type definitions for usage logs
  */
-import type { UsageLog } from './data/schema'
 
 // ============================================================================
 // Log Category Types
@@ -179,6 +178,29 @@ export interface LogStatistics {
   quota: number
   rpm: number
   tpm: number
+}
+
+export interface UsageLog {
+  id: number
+  type: number
+  user_id: number
+  username: string
+  token_name: string
+  model_name: string
+  channel: number
+  channel_name: string
+  prompt_tokens: number
+  completion_tokens: number
+  quota: number
+  content: string
+  request_id: string
+  group: string
+  ip: string
+  status: string
+  is_stream: boolean
+  use_time: number
+  other: string
+  created_at: number
 }
 
 // ============================================================================

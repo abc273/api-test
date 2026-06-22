@@ -685,6 +685,7 @@ type TaskSubmitReq struct {
 	Duration       int                    `json:"duration,omitempty"`
 	Seconds        string                 `json:"seconds,omitempty"`
 	InputReference string                 `json:"input_reference,omitempty"`
+	ExternalUserID string                 `json:"external_user_id,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 

@@ -147,6 +147,13 @@ func GetVolcPortraitAsset(assetID string, projectName string) (*VolcPortraitAsse
 	return &result, nil
 }
 
+func IsVolcPortraitGroupNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "NotFound.group_id")
+}
+
 func resolveVolcPortraitProjectName(projectName string) string {
 	projectName = strings.TrimSpace(projectName)
 	if projectName != "" {

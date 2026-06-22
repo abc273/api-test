@@ -106,7 +106,18 @@ api.interceptors.response.use(
 function getUserId(): string | null {
   try {
     if (typeof window !== 'undefined') {
-      return window.localStorage.getItem('uid')
+      const uid = window.localStorage.getItem('uid')
+      if (uid) return uid
+
+      const rawUser = window.localStorage.getItem('user')
+      if (!rawUser) return null
+
+      const user = JSON.parse(rawUser) as { id?: number | string }
+      if (!user?.id) return null
+
+      const repairedUID = String(user.id)
+      window.localStorage.setItem('uid', repairedUID)
+      return repairedUID
     }
   } catch {
     /* empty */

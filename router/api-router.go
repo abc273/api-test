@@ -28,6 +28,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)
 		apiRouter.GET("/privacy-policy", controller.GetPrivacyPolicy)
 		apiRouter.GET("/about", controller.GetAbout)
+		apiRouter.GET("/docs/meta", controller.GetApiDocsMeta)
+		apiRouter.GET("/docs/changelog", controller.ListApiDocChangelog)
+		apiRouter.GET("/docs/revisions/:version", controller.GetApiDocRevision)
+		apiRouter.GET("/docs/revisions/:version/diff", controller.GetApiDocRevisionDiff)
 		apiRouter.GET("/docs", controller.GetDocs)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
@@ -87,6 +91,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/passkey/verify/finish", controller.PasskeyVerifyFinish)
 				selfRoute.DELETE("/passkey", controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
+				selfRoute.GET("/wallet/summary", controller.GetWalletSummary)
 				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
 				selfRoute.GET("/topup/self", controller.GetUserTopUps)
 				selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)
@@ -186,6 +191,14 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
 		}
+		apiDocsAdminRoute := apiRouter.Group("/docs")
+		apiDocsAdminRoute.Use(middleware.RootAuth())
+		{
+			apiDocsAdminRoute.GET("/admin/revisions", controller.AdminListApiDocRevisions)
+			apiDocsAdminRoute.POST("/publish", controller.PublishApiDocs)
+			apiDocsAdminRoute.POST("/preview", controller.PreviewApiDocs)
+			apiDocsAdminRoute.POST("/diff", controller.DiffApiDocs)
+		}
 
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
@@ -271,6 +284,17 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
+		portraitAssetAdminRoute := apiRouter.Group("/portrait_assets/admin")
+		portraitAssetAdminRoute.Use(middleware.AdminAuth())
+		{
+			registerAdminPortraitAssetRoutes(portraitAssetAdminRoute)
+		}
+		adminPortraitAssetRoute := apiRouter.Group("/admin/portrait_assets")
+		adminPortraitAssetRoute.Use(middleware.AdminAuth())
+		{
+			registerAdminPortraitAssetRoutes(adminPortraitAssetRoute)
+		}
+
 		portraitAssetRoute := apiRouter.Group("/portrait_assets")
 		{
 			portraitAssetRoute.GET("/", middleware.UserAuth(), controller.ListPortraitAssetJobs)
@@ -282,12 +306,18 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.GET("/rpa/jobs", controller.ListPortraitAssetJobsForRPA)
 			portraitAssetRoute.PUT("/rpa/jobs/:id", controller.UpdatePortraitAssetJobFromRPA)
 			portraitAssetRoute.GET("/official/config", middleware.TokenOrUserAuth(), controller.GetOfficialPortraitAssetConfig)
+			portraitAssetRoute.GET("/folders", middleware.TokenOrUserAuth(), controller.ListPortraitAssetFolders)
+			portraitAssetRoute.POST("/folders", middleware.TokenOrUserAuth(), controller.CreatePortraitAssetFolder)
+			portraitAssetRoute.PATCH("/folders/:folder_id", middleware.TokenOrUserAuth(), controller.UpdatePortraitAssetFolder)
+			portraitAssetRoute.DELETE("/folders/:folder_id", middleware.TokenOrUserAuth(), controller.DeletePortraitAssetFolder)
+			portraitAssetRoute.POST("/folders/move", middleware.TokenOrUserAuth(), controller.MovePortraitAssetsToFolder)
 			portraitAssetRoute.GET("/official/jobs", middleware.TokenOrUserAuth(), controller.ListOfficialPortraitAssetJobs)
 			portraitAssetRoute.POST("/official/jobs", middleware.TokenOrUserAuth(), controller.CreateOfficialPortraitAssetJob)
 			portraitAssetRoute.POST("/official/jobs/:id/validation", middleware.TokenOrUserAuth(), controller.RefreshOfficialPortraitValidation)
 			portraitAssetRoute.POST("/official/upload", middleware.TokenOrUserAuth(), controller.UploadOfficialPortraitAssetMaterial)
 			portraitAssetRoute.POST("/official/jobs/:id/asset", middleware.TokenOrUserAuth(), controller.SubmitOfficialPortraitAsset)
 			portraitAssetRoute.POST("/official/jobs/:id/sync", middleware.TokenOrUserAuth(), controller.SyncOfficialPortraitAssetJob)
+			portraitAssetRoute.DELETE("/official/jobs/:id", middleware.TokenOrUserAuth(), controller.DeleteOfficialPortraitAssetJob)
 			portraitAssetRoute.POST("/official/jobs/:id/confirm", middleware.TokenOrUserAuth(), controller.ConfirmOfficialPortraitAsset)
 			portraitAssetRoute.POST("/official/jobs/:id/reject", middleware.TokenOrUserAuth(), controller.RejectOfficialPortraitAsset)
 			portraitAssetRoute.GET("/official/jobs/:id/preview/:state", controller.OfficialPortraitAssetPreview)
@@ -300,6 +330,7 @@ func SetApiRouter(router *gin.Engine) {
 			portraitAssetRoute.POST("/virtual/upload", middleware.TokenOrUserAuth(), controller.UploadVirtualPortraitAssetMaterial)
 			portraitAssetRoute.POST("/virtual/assets", middleware.TokenOrUserAuth(), controller.CreateUserVirtualPortraitAsset)
 			portraitAssetRoute.POST("/virtual/assets/:id/sync", middleware.TokenOrUserAuth(), controller.SyncUserVirtualPortraitAsset)
+			portraitAssetRoute.DELETE("/virtual/assets/:id", middleware.TokenOrUserAuth(), controller.DeleteUserVirtualPortraitAsset)
 		}
 
 		usageRoute := apiRouter.Group("/usage")
@@ -418,4 +449,13 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
 	}
+}
+
+func registerAdminPortraitAssetRoutes(route *gin.RouterGroup) {
+	route.GET("/official/jobs", controller.AdminListOfficialPortraitAssetJobs)
+	route.POST("/official/jobs/:id/sync", controller.AdminSyncOfficialPortraitAssetJob)
+	route.DELETE("/official/jobs/:id", controller.AdminDeleteOfficialPortraitAssetJob)
+	route.GET("/virtual/assets", controller.AdminListVirtualPortraitAssets)
+	route.POST("/virtual/assets/:id/sync", controller.AdminSyncVirtualPortraitAsset)
+	route.DELETE("/virtual/assets/:id", controller.AdminDeleteVirtualPortraitAsset)
 }

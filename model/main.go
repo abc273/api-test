@@ -284,11 +284,17 @@ func migrateDB() error {
 		&SubscriptionPreConsumeRecord{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
+		&ApiDocRevision{},
+		&ApiDocChangeItem{},
+		&PortraitAssetFolder{},
 		&PortraitAssetJob{},
 		&VirtualPortraitAssetGroup{},
 		&VirtualPortraitAsset{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := migratePortraitExternalUserID(); err != nil {
 		return err
 	}
 	if common.UsingSQLite {
@@ -335,6 +341,9 @@ func migrateDBFast() error {
 		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
+		{&ApiDocRevision{}, "ApiDocRevision"},
+		{&ApiDocChangeItem{}, "ApiDocChangeItem"},
+		{&PortraitAssetFolder{}, "PortraitAssetFolder"},
 		{&PortraitAssetJob{}, "PortraitAssetJob"},
 		{&VirtualPortraitAssetGroup{}, "VirtualPortraitAssetGroup"},
 		{&VirtualPortraitAsset{}, "VirtualPortraitAsset"},
@@ -362,6 +371,9 @@ func migrateDBFast() error {
 			return err
 		}
 	}
+	if err := migratePortraitExternalUserID(); err != nil {
+		return err
+	}
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -379,6 +391,43 @@ func migrateLOGDB() error {
 	var err error
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
+	}
+	return nil
+}
+
+func migratePortraitExternalUserID() error {
+	for _, model := range []interface{}{
+		&PortraitAssetFolder{},
+		&PortraitAssetJob{},
+		&VirtualPortraitAssetGroup{},
+		&VirtualPortraitAsset{},
+	} {
+		if !DB.Migrator().HasTable(model) || !DB.Migrator().HasColumn(model, "ExternalUserID") {
+			continue
+		}
+		if err := DB.Model(model).Where("external_user_id IS NULL").Update("external_user_id", "").Error; err != nil {
+			return err
+		}
+	}
+
+	if !DB.Migrator().HasTable(&VirtualPortraitAssetGroup{}) {
+		return nil
+	}
+	for _, indexName := range []string{
+		"idx_virtual_portrait_asset_groups_user_id",
+		"uni_virtual_portrait_asset_groups_user_id",
+	} {
+		if common.UsingPostgreSQL {
+			dropConstraintSQL := `ALTER TABLE "virtual_portrait_asset_groups" DROP CONSTRAINT IF EXISTS "` + indexName + `"`
+			if err := DB.Exec(dropConstraintSQL).Error; err != nil {
+				return err
+			}
+		}
+		if DB.Migrator().HasIndex(&VirtualPortraitAssetGroup{}, indexName) {
+			if err := DB.Migrator().DropIndex(&VirtualPortraitAssetGroup{}, indexName); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

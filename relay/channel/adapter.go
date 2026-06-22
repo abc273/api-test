@@ -81,3 +81,7 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+type TaskDeleteAdaptor interface {
+	DeleteTask(c *gin.Context, info *relaycommon.RelayInfo, originTask *model.Task) *dto.TaskError
+}

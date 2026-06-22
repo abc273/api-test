@@ -16,12 +16,12 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, FileWarning } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { CopyButton } from '@/components/copy-button'
-import { PublicLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Markdown } from '@/components/ui/markdown'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CopyButton } from '@/components/copy-button'
+import { PublicLayout } from '@/components/layout'
 import type { LegalDocumentResponse } from './types'
 
 type LegalDocumentProps = {
@@ -29,6 +29,7 @@ type LegalDocumentProps = {
   queryKey: string
   fetchDocument: () => Promise<LegalDocumentResponse>
   emptyMessage: string
+  headerExtra?: ReactNode
 }
 
 type TocHeading = {
@@ -220,11 +221,14 @@ function getTableHeaderLabels(node: unknown): string[] {
 
   const thead = tableNode.children?.find((child) => child.tagName === 'thead')
   const headerRow = thead?.children?.find((child) => child.tagName === 'tr')
-  const headerCells = headerRow?.children?.filter((child) => child.tagName === 'th')
+  const headerCells = headerRow?.children?.filter(
+    (child) => child.tagName === 'th'
+  )
 
   return (
-    headerCells?.map((cell) => extractMarkdownNodeText(cell).trim()).filter(Boolean) ??
-    []
+    headerCells
+      ?.map((cell) => extractMarkdownNodeText(cell).trim())
+      .filter(Boolean) ?? []
   )
 }
 
@@ -310,19 +314,18 @@ function classifyColumnRole(
   }
 
   if (totalColumns === 5) {
-    return (
-      ['name', 'type', 'required', 'example', 'description'][index] ?? 'default'
-    ) as TableColumnRole
+    return (['name', 'type', 'required', 'example', 'description'][index] ??
+      'default') as TableColumnRole
   }
 
   if (totalColumns === 4) {
-    return (
-      ['name', 'type', 'endpoint', 'description'][index] ?? 'default'
-    ) as TableColumnRole
+    return (['name', 'type', 'endpoint', 'description'][index] ??
+      'default') as TableColumnRole
   }
 
   if (totalColumns === 3) {
-    return (['name', 'type', 'description'][index] ?? 'default') as TableColumnRole
+    return (['name', 'type', 'description'][index] ??
+      'default') as TableColumnRole
   }
 
   return 'default'
@@ -449,7 +452,7 @@ function TocNav({
             </div>
 
             {isExpanded && hasChildren && (
-              <div className='space-y-1 border-l border-border/50 pl-3'>
+              <div className='border-border/50 space-y-1 border-l pl-3'>
                 {section.children.map((heading) => {
                   const isActive = heading.id === activeHeadingId
 
@@ -465,7 +468,9 @@ function TocNav({
                       data-active={isActive}
                     >
                       <span className='docs-toc-badge'>H3</span>
-                      <span className='min-w-0 break-words'>{heading.text}</span>
+                      <span className='min-w-0 break-words'>
+                        {heading.text}
+                      </span>
                     </a>
                   )
                 })}
@@ -510,6 +515,7 @@ export function LegalDocument({
   queryKey,
   fetchDocument,
   emptyMessage,
+  headerExtra,
 }: LegalDocumentProps) {
   const { t } = useTranslation()
   const { data, isError, error, isLoading } = useQuery({
@@ -522,12 +528,13 @@ export function LegalDocument({
   const hasContent = rawContent.length > 0
   const isUrl = hasContent && isValidUrl(rawContent)
   const success = data?.success ?? false
-  const tocHeadings = useMemo(() => extractTocHeadings(rawContent), [rawContent])
+  const tocHeadings = useMemo(
+    () => extractTocHeadings(rawContent),
+    [rawContent]
+  )
   const [observedActiveHeadingId, setObservedActiveHeadingId] = useState('')
   const activeHeadingId =
-    tocHeadings.length === 0
-      ? ''
-      : observedActiveHeadingId || tocHeadings[0].id
+    tocHeadings.length === 0 ? '' : observedActiveHeadingId || tocHeadings[0].id
   const tocSections = useMemo(() => {
     const sections: TocSection[] = []
     let currentSection: TocSection | null = null
@@ -562,7 +569,9 @@ export function LegalDocument({
 
     return tocSections[0]?.id ?? ''
   }, [activeHeadingId, tocSections])
-  const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null)
+  const [expandedSectionId, setExpandedSectionId] = useState<string | null>(
+    null
+  )
   const derivedExpandedSectionId = useMemo(() => {
     const activeChildSection = tocSections.find((section) =>
       section.children.some((child) => child.id === activeHeadingId)
@@ -571,23 +580,20 @@ export function LegalDocument({
     return expandedSectionId ?? activeChildSection?.id ?? null
   }, [activeHeadingId, expandedSectionId, tocSections])
 
-  const scrollToHeading = useCallback(
-    (headingId: string) => {
-      const element = document.getElementById(headingId)
-      if (!element) {
-        return
-      }
+  const scrollToHeading = useCallback((headingId: string) => {
+    const element = document.getElementById(headingId)
+    if (!element) {
+      return
+    }
 
-      const top = element.getBoundingClientRect().top + window.scrollY - 112
-      window.scrollTo({
-        top: Math.max(0, top),
-        behavior: 'smooth',
-      })
-      setObservedActiveHeadingId(headingId)
-      window.history.replaceState(null, '', `#${headingId}`)
-    },
-    []
-  )
+    const top = element.getBoundingClientRect().top + window.scrollY - 112
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: 'smooth',
+    })
+    setObservedActiveHeadingId(headingId)
+    window.history.replaceState(null, '', `#${headingId}`)
+  }, [])
 
   useEffect(() => {
     if (tocHeadings.length === 0) {
@@ -686,7 +692,7 @@ export function LegalDocument({
           <h1
             {...props}
             id={heading.id}
-            className='group/heading scroll-mt-28 border-b border-border/40 pb-4'
+            className='group/heading border-border/40 scroll-mt-28 border-b pb-4'
           >
             <a
               href={`#${heading.id}`}
@@ -718,7 +724,7 @@ export function LegalDocument({
           <h2
             {...props}
             id={heading.id}
-            className='group/heading scroll-mt-28 border-b border-border/25 pb-3'
+            className='group/heading border-border/25 scroll-mt-28 border-b pb-3'
           >
             <a
               href={`#${heading.id}`}
@@ -864,13 +870,7 @@ export function LegalDocument({
         )
       },
       pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
-      table: ({
-        children,
-        node,
-      }: {
-        children?: ReactNode
-        node?: unknown
-      }) => {
+      table: ({ children, node }: { children?: ReactNode; node?: unknown }) => {
         const tableMeta = getDocsTableMeta(node)
 
         return (
@@ -902,8 +902,12 @@ export function LegalDocument({
           </DocsTableContext.Provider>
         )
       },
-      thead: ({ children }: { children?: ReactNode }) => <thead>{children}</thead>,
-      tbody: ({ children }: { children?: ReactNode }) => <tbody>{children}</tbody>,
+      thead: ({ children }: { children?: ReactNode }) => (
+        <thead>{children}</thead>
+      ),
+      tbody: ({ children }: { children?: ReactNode }) => (
+        <tbody>{children}</tbody>
+      ),
       tr: DocsTableRow,
       th: ({
         children,
@@ -1037,13 +1041,12 @@ export function LegalDocument({
       <div className='docs-page'>
         <div className='docs-page__hero'>
           <h1 className='docs-page__title'>{title}</h1>
+          {headerExtra}
         </div>
 
         <div className='relative'>
           <div className='docs-page__content'>
-            <div className='docs-page__article'>
-              {renderedDocument}
-            </div>
+            <div className='docs-page__article'>{renderedDocument}</div>
           </div>
 
           {tocSections.length > 0 && (
@@ -1051,7 +1054,9 @@ export function LegalDocument({
               <div className='docs-page__rail'>
                 <div className='docs-page__rail-card'>
                   <div>
-                    <p className='docs-page__toc-heading'>{t('On this page')}</p>
+                    <p className='docs-page__toc-heading'>
+                      {t('On this page')}
+                    </p>
                     <p className='docs-page__toc-subtitle'>
                       {t('Jump between document sections')}
                     </p>

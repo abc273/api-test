@@ -1,10 +1,12 @@
 package claude
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -377,6 +379,16 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 							})
 						}
 					default:
+						if mediaMessage.Type == dto.ContentTypeFile {
+							claudeFileMessage, ok, err := convertOpenAIFileContentToClaude(c, mediaMessage)
+							if err != nil {
+								return nil, err
+							}
+							if ok {
+								claudeMediaMessages = append(claudeMediaMessages, claudeFileMessage)
+							}
+							continue
+						}
 						source := mediaMessage.ToFileSource()
 						if source == nil {
 							continue
@@ -432,6 +444,107 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 	claudeRequest.Prompt = ""
 	claudeRequest.Messages = claudeMessages
 	return &claudeRequest, nil
+}
+
+func convertOpenAIFileContentToClaude(c *gin.Context, mediaMessage dto.MediaContent) (dto.ClaudeMediaMessage, bool, error) {
+	file := mediaMessage.GetFile()
+	if file == nil || strings.TrimSpace(file.FileData) == "" {
+		return dto.ClaudeMediaMessage{}, false, nil
+	}
+	kind, mimeType := classifyOpenAIFileForClaude(file)
+	if kind == "" {
+		return dto.ClaudeMediaMessage{}, false, nil
+	}
+	source := types.NewFileSourceFromData(strings.TrimSpace(file.FileData), mimeType)
+	base64Data, loadedMimeType, err := service.GetBase64Data(c, source, "formatting file for Claude")
+	if err != nil {
+		return dto.ClaudeMediaMessage{}, false, fmt.Errorf("get file data failed: %s", err.Error())
+	}
+	if strings.TrimSpace(loadedMimeType) != "" {
+		mimeType = loadedMimeType
+	}
+	switch kind {
+	case "document":
+		if mimeType == "" {
+			mimeType = "application/pdf"
+		}
+		return dto.ClaudeMediaMessage{
+			Type: "document",
+			Source: &dto.ClaudeMessageSource{
+				Type:      "base64",
+				MediaType: mimeType,
+				Data:      base64Data,
+			},
+		}, true, nil
+	case "text":
+		textBytes, err := base64.StdEncoding.DecodeString(base64Data)
+		if err != nil {
+			return dto.ClaudeMediaMessage{}, false, fmt.Errorf("decode text file data failed: %s", err.Error())
+		}
+		return dto.ClaudeMediaMessage{
+			Type: "text",
+			Text: common.GetPointer(string(textBytes)),
+		}, true, nil
+	case "image":
+		if mimeType == "" {
+			mimeType = "image/jpeg"
+		}
+		return dto.ClaudeMediaMessage{
+			Type: "image",
+			Source: &dto.ClaudeMessageSource{
+				Type:      "base64",
+				MediaType: mimeType,
+				Data:      base64Data,
+			},
+		}, true, nil
+	default:
+		return dto.ClaudeMediaMessage{}, false, nil
+	}
+}
+
+func classifyOpenAIFileForClaude(file *dto.MessageFile) (string, string) {
+	fileName := strings.TrimSpace(file.FileName)
+	if fileName != "" {
+		ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
+		mimeType := service.GetMimeTypeByExtension(ext)
+		return classifyClaudeMimeType(mimeType)
+	}
+	if mimeType := dataURLMimeType(file.FileData); mimeType != "" {
+		return classifyClaudeMimeType(mimeType)
+	}
+	return "", ""
+}
+
+func classifyClaudeMimeType(mimeType string) (string, string) {
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	switch {
+	case mimeType == "application/pdf":
+		return "document", "application/pdf"
+	case strings.HasPrefix(mimeType, "text/"):
+		return "text", mimeType
+	case mimeType == "application/json" || mimeType == "application/xml":
+		return "text", mimeType
+	case strings.HasPrefix(mimeType, "image/"):
+		return "image", mimeType
+	default:
+		return "", ""
+	}
+}
+
+func dataURLMimeType(data string) string {
+	data = strings.TrimSpace(data)
+	if !strings.HasPrefix(data, "data:") {
+		return ""
+	}
+	comma := strings.Index(data, ",")
+	if comma <= len("data:") {
+		return ""
+	}
+	header := data[len("data:"):comma]
+	if semicolon := strings.Index(header, ";"); semicolon >= 0 {
+		header = header[:semicolon]
+	}
+	return strings.TrimSpace(header)
 }
 
 func StreamResponseClaude2OpenAI(claudeResponse *dto.ClaudeResponse) *dto.ChatCompletionsStreamResponse {

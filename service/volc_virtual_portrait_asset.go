@@ -40,12 +40,13 @@ func CreateVolcPortraitAssetGroup(name string, description string, projectName s
 	return strings.TrimSpace(result.Id), nil
 }
 
-func EnsureUserVirtualPortraitAssetGroup(userId int) (*model.VirtualPortraitAssetGroup, error) {
+func EnsureUserVirtualPortraitAssetGroup(userId int, externalUserID string) (*model.VirtualPortraitAssetGroup, error) {
+	externalUserID = model.NormalizeExternalUserID(externalUserID)
 	projectName := GetVolcPortraitProjectName()
-	groupName := buildUserVirtualPortraitAssetGroupName(userId)
-	description := buildUserVirtualPortraitAssetGroupDescription(userId)
+	groupName := buildUserVirtualPortraitAssetGroupName(userId, externalUserID)
+	description := buildUserVirtualPortraitAssetGroupDescription(userId, externalUserID)
 
-	group, err := model.GetUserVirtualPortraitAssetGroup(userId)
+	group, err := model.GetUserVirtualPortraitAssetGroupForExternalUser(userId, externalUserID)
 	switch {
 	case err == nil:
 		if strings.TrimSpace(group.VolcGroupID) != "" && group.Status == model.VirtualPortraitAssetGroupStatusActive {
@@ -60,16 +61,18 @@ func EnsureUserVirtualPortraitAssetGroup(userId int) (*model.VirtualPortraitAsse
 		}
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		group = &model.VirtualPortraitAssetGroup{
-			UserId:      userId,
-			Name:        groupName,
-			Description: description,
-			ProjectName: projectName,
-			Status:      model.VirtualPortraitAssetGroupStatusCreating,
+			UserId:         userId,
+			ExternalUserID: externalUserID,
+			Name:           groupName,
+			Description:    description,
+			ProjectName:    projectName,
+			Status:         model.VirtualPortraitAssetGroupStatusCreating,
 		}
 	default:
 		return nil, err
 	}
 
+	group.ExternalUserID = externalUserID
 	group.Name = groupName
 	group.Description = description
 	group.ProjectName = projectName
@@ -97,8 +100,8 @@ func EnsureUserVirtualPortraitAssetGroup(userId int) (*model.VirtualPortraitAsse
 	return group, nil
 }
 
-func CreateUserVirtualPortraitAsset(userId int, name string, assetURL string, assetType string) (*model.VirtualPortraitAsset, error) {
-	group, err := EnsureUserVirtualPortraitAssetGroup(userId)
+func CreateUserVirtualPortraitAsset(userId int, externalUserID string, name string, assetURL string, assetType string, folderID int) (*model.VirtualPortraitAsset, error) {
+	group, err := EnsureUserVirtualPortraitAssetGroup(userId, externalUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +111,7 @@ func CreateUserVirtualPortraitAsset(userId int, name string, assetURL string, as
 		return nil, err
 	}
 
-	asset, err := model.CreateUserVirtualPortraitAsset(userId, group, name, normalizeVolcPortraitAssetType(assetType), assetURL, assetID)
+	asset, err := model.CreateUserVirtualPortraitAsset(userId, group, name, normalizeVolcPortraitAssetType(assetType), assetURL, assetID, folderID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,21 +124,85 @@ func CreateUserVirtualPortraitAsset(userId int, name string, assetURL string, as
 }
 
 func SyncUserVirtualPortraitAsset(userId int, id int) (*model.VirtualPortraitAsset, error) {
-	asset, err := model.GetUserVirtualPortraitAssetByID(userId, id)
+	return SyncUserVirtualPortraitAssetForExternalUser(userId, id, "", false)
+}
+
+func SyncUserVirtualPortraitAssetForExternalUser(userId int, id int, externalUserID string, filterExternalUserID bool) (*model.VirtualPortraitAsset, error) {
+	asset, err := model.GetUserVirtualPortraitAssetByIDForExternalUser(userId, id, externalUserID, filterExternalUserID)
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(asset.VolcAssetID) == "" {
-		return nil, errors.New("素材缺少火山资产 ID")
-	}
-	info, err := GetVolcPortraitAsset(asset.VolcAssetID, asset.ProjectName)
-	if err != nil {
-		return nil, err
-	}
-	if err := applyVolcVirtualPortraitAssetInfo(asset, info); err != nil {
+	if err := syncUserVirtualPortraitAsset(asset); err != nil {
 		return nil, err
 	}
 	return asset, nil
+}
+
+func SyncUserVirtualPortraitAssetsForDisplay(assets []*model.VirtualPortraitAsset) {
+	for _, asset := range assets {
+		if !shouldAutoSyncVirtualPortraitAsset(asset, 5) {
+			continue
+		}
+		if err := syncUserVirtualPortraitAsset(asset); err != nil {
+			common.SysError(fmt.Sprintf("failed to auto sync virtual portrait asset %d: %v", asset.Id, err))
+		}
+	}
+}
+
+func ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId int, assetID string, externalUserID string) error {
+	validateErr := model.ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID)
+	if validateErr == nil {
+		return nil
+	}
+	if !errors.Is(validateErr, gorm.ErrRecordNotFound) {
+		return validateErr
+	}
+
+	asset, err := model.GetUserVirtualPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID)
+	if err != nil && model.NormalizeExternalUserID(externalUserID) == "" {
+		asset, err = model.GetUserVirtualPortraitAssetByAssetIDIgnoringExternalUser(userId, assetID)
+	}
+	if err != nil {
+		return validateErr
+	}
+	if !shouldAutoSyncVirtualPortraitAsset(asset, 0) {
+		return validateErr
+	}
+	if err := syncUserVirtualPortraitAsset(asset); err != nil {
+		common.SysError(fmt.Sprintf("failed to auto sync virtual portrait asset %d before validation: %v", asset.Id, err))
+		return validateErr
+	}
+	return model.ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID)
+}
+
+func shouldAutoSyncVirtualPortraitAsset(asset *model.VirtualPortraitAsset, minIntervalSeconds int64) bool {
+	if asset == nil {
+		return false
+	}
+	if model.NormalizePortraitAssetID(asset.VolcAssetID) == "" {
+		return false
+	}
+	if asset.Status == model.VirtualPortraitAssetStatusActive || asset.Status == model.VirtualPortraitAssetStatusFailed {
+		return false
+	}
+	if minIntervalSeconds <= 0 {
+		return true
+	}
+	return common.GetTimestamp()-asset.UpdatedTime >= minIntervalSeconds
+}
+
+func syncUserVirtualPortraitAsset(asset *model.VirtualPortraitAsset) error {
+	if asset == nil {
+		return gorm.ErrInvalidData
+	}
+	if strings.TrimSpace(asset.VolcAssetID) == "" {
+		return errors.New("素材缺少火山资产 ID")
+	}
+	info, err := GetVolcPortraitAsset(asset.VolcAssetID, asset.ProjectName)
+	if err != nil {
+		return err
+	}
+	return applyVolcVirtualPortraitAssetInfo(asset, info)
 }
 
 func applyVolcVirtualPortraitAssetInfo(asset *model.VirtualPortraitAsset, info *VolcPortraitAssetInfo) error {
@@ -171,12 +238,24 @@ func applyVolcVirtualPortraitAssetInfo(asset *model.VirtualPortraitAsset, info *
 	return model.SaveVirtualPortraitAsset(asset)
 }
 
-func buildUserVirtualPortraitAssetGroupName(userId int) string {
-	return fmt.Sprintf("user-%d-virtual-portraits", userId)
+func buildUserVirtualPortraitAssetGroupName(userId int, externalUserID string) string {
+	externalUserID = model.NormalizeExternalUserID(externalUserID)
+	if externalUserID == "" {
+		return fmt.Sprintf("user-%d-virtual-portraits", userId)
+	}
+	hash := common.Sha1([]byte(externalUserID))
+	if len(hash) > 12 {
+		hash = hash[:12]
+	}
+	return fmt.Sprintf("user-%d-%s-virtual-portraits", userId, hash)
 }
 
-func buildUserVirtualPortraitAssetGroupDescription(userId int) string {
-	return fmt.Sprintf("Managed virtual portrait asset group for user %d", userId)
+func buildUserVirtualPortraitAssetGroupDescription(userId int, externalUserID string) string {
+	externalUserID = model.NormalizeExternalUserID(externalUserID)
+	if externalUserID == "" {
+		return fmt.Sprintf("Managed virtual portrait asset group for user %d", userId)
+	}
+	return fmt.Sprintf("Managed virtual portrait asset group for user %d external user %s", userId, externalUserID)
 }
 
 func firstNonEmpty(values ...string) string {

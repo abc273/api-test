@@ -12,42 +12,42 @@ interface ModelConfig {
 
 const MODELS: ModelConfig[] = [
   {
-    id: 'gpt-4o',
-    name: 'gpt-4o',
+    id: 'deepseek',
+    name: 'DeepSeek',
     response:
-      'Artificial intelligence models can be seamlessly accessed through a unified API gateway, enabling developers to switch between providers effortlessly.',
+      '统一地址可直接接入对话能力，保留标准调用方式，方便把现有业务快速迁移过来。',
     tokens: 27,
-    latency: 142,
+    latency: 96,
     badgeClass:
       'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/25',
   },
   {
-    id: 'claude-sonnet',
-    name: 'claude-sonnet-4-20250514',
+    id: 'deepseek-v4',
+    name: 'DeepSeek-v4-pro',
     response:
-      'A unified gateway abstracts away provider differences, letting you focus on building great products while we handle routing, failover, and cost optimization.',
-    tokens: 31,
-    latency: 168,
+      '接入完成后，可以继续在控制台查看请求情况、核对模型价格，并管理不同业务的使用方式。',
+    tokens: 33,
+    latency: 118,
     badgeClass:
       'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/25',
   },
   {
-    id: 'gemini-pro',
-    name: 'gemini-2.5-pro',
+    id: 'doubao',
+    name: 'doubao-seed-2-0-lite',
     response:
-      'By consolidating multiple AI providers behind one endpoint, teams can reduce integration complexity and gain unified observability across all model usage.',
-    tokens: 29,
-    latency: 156,
+      '统一接口之外，文档、定价与控制台信息也放在一起，便于研发和运营协同查看。',
+    tokens: 30,
+    latency: 104,
     badgeClass:
       'bg-blue-500/10 text-blue-600 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400 dark:ring-blue-500/25',
   },
   {
-    id: 'deepseek',
-    name: 'deepseek-chat',
+    id: 'seedream',
+    name: 'seedream-4.5',
     response:
-      'An API gateway provides automatic load balancing, rate limiting, and cost tracking — essential infrastructure for production AI applications at scale.',
-    tokens: 25,
-    latency: 93,
+      '当业务涉及生成内容和资产工作流时，可以继续按文档完成任务查询、下载结果和资产管理。',
+    tokens: 28,
+    latency: 127,
     badgeClass:
       'bg-violet-500/10 text-violet-600 ring-violet-500/20 dark:bg-violet-500/15 dark:text-violet-400 dark:ring-violet-500/25',
   },

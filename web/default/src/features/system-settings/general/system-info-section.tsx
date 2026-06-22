@@ -305,14 +305,17 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                   <FormLabel>{t('Home Page Content')}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder={t('Welcome to our New API...')}
+                      placeholder={t(
+                        'Home page editing has moved to frontend source files'
+                      )}
                       rows={6}
+                      disabled
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Content displayed on the home page (supports Markdown)'
+                      'The default homepage no longer reads this database field. Edit the frontend files under web/default/src/features/home/components/sections instead.'
                     )}
                   </FormDescription>
                   <FormMessage />

@@ -28,7 +28,6 @@ import {
   dotColorMap,
   textColorMap,
 } from '@/components/status-badge'
-import type { UsageLog } from '../../data/schema'
 import {
   getTimeColor,
   formatModelName,
@@ -43,7 +42,7 @@ import {
   getLogTypeConfig,
   isPerCallBilling,
 } from '../../lib/utils'
-import type { LogOtherData } from '../../types'
+import type { LogOtherData, UsageLog } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
@@ -113,11 +112,9 @@ function buildDetailSegments(
 
     const cacheEntries = tieredSummary.priceEntries
       .filter((entry) =>
-        [
-          'cacheReadPrice',
-          'cacheCreatePrice',
-          'cacheCreate1hPrice',
-        ].includes(entry.field)
+        ['cacheReadPrice', 'cacheCreatePrice', 'cacheCreate1hPrice'].includes(
+          entry.field
+        )
       )
       .map((entry) => {
         return formatPriceCompact(entry.price)
@@ -170,8 +167,7 @@ function buildDetailSegments(
           other.cache_ratio != null && other.cache_ratio !== 1
             ? formatPriceCompact(inputPriceUSD * other.cache_ratio)
             : null,
-          other.cache_creation_ratio != null &&
-          other.cache_creation_ratio !== 1
+          other.cache_creation_ratio != null && other.cache_creation_ratio !== 1
             ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio)
             : null,
           other.cache_creation_ratio_1h != null &&
@@ -589,7 +585,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         return (
           <div className='flex flex-col gap-0.5'>
             <span className='font-mono text-xs font-medium'>
-              {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
+              {promptTokens.toLocaleString()} /{' '}
+              {completionTokens.toLocaleString()}
             </span>
             {cacheSegments.length > 0 && (
               <span className='text-muted-foreground/60 text-[11px]'>

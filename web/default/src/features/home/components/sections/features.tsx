@@ -8,7 +8,6 @@ import {
   Users,
   HeartHandshake,
 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
 interface FeaturesProps {
@@ -16,21 +15,18 @@ interface FeaturesProps {
 }
 
 export function Features(_props: FeaturesProps) {
-  const { t } = useTranslation()
-
   const features = [
     {
       id: 'fast',
       num: '01',
-      title: t('Lightning Fast'),
-      desc: t(
-        'Optimized network architecture ensures millisecond response times'
-      ),
+      title: 'OpenAI 兼容接口',
+      desc:
+        '对话模型走统一接入方式，标准客户端和已有 OpenAI SDK 可以更快落地。',
       span: 'md:col-span-2',
       icon: <Zap className='size-4 text-blue-400' />,
       visual: (
         <div className='mt-4 grid grid-cols-3 gap-2'>
-          {['OpenAI', 'Claude', 'Gemini', 'DeepSeek', 'Qwen', 'Llama'].map(
+          {['DeepSeek', 'DeepSeek-v4-pro', 'doubao-seed-2-0-lite', 'seedance2', 'vidu-q2', 'seedream4.5'].map(
             (name) => (
               <div
                 key={name}
@@ -46,10 +42,8 @@ export function Features(_props: FeaturesProps) {
     {
       id: 'secure',
       num: '02',
-      title: t('Secure & Reliable'),
-      desc: t(
-        'Enterprise-grade security with comprehensive permission management'
-      ),
+      title: '视频与图片生成',
+      desc: '提交生成任务、查询状态、取消任务、下载结果，接口结构保持一致。',
       span: 'md:col-span-1',
       icon: <Shield className='size-4 text-emerald-400' />,
       visual: (
@@ -83,13 +77,14 @@ export function Features(_props: FeaturesProps) {
     {
       id: 'global',
       num: '03',
-      title: t('Global Coverage'),
-      desc: t('Multi-region deployment for stable global access'),
+      title: '真人与虚拟资产',
+      desc:
+        '支持真人资产、虚拟人像资产和文件夹分组，并保留下游子用户独立隔离。',
       span: 'md:col-span-1',
       icon: <Globe className='size-4 text-violet-400' />,
       visual: (
         <div className='mt-4 space-y-2'>
-          {[t('Load Balancing'), t('Rate Limiting'), t('Cost Tracking')].map(
+          {['真人资产', '虚拟资产', '文件夹分组'].map(
             (step, i) => (
               <div key={step} className='flex items-center gap-2'>
                 <div
@@ -112,14 +107,15 @@ export function Features(_props: FeaturesProps) {
     {
       id: 'developer',
       num: '04',
-      title: t('Developer Friendly'),
-      desc: t('Complete API documentation with multi-language SDK support'),
+      title: '文档、定价与控制台',
+      desc:
+        '公开接口文档、模型定价、系统公告和控制台操作聚合在同一处。',
       span: 'md:col-span-2',
       icon: <Code className='size-4 text-amber-400' />,
       visual: (
         <div className='mt-4 flex items-center gap-3'>
           <div className='flex -space-x-2'>
-            {['API', 'SDK', 'CLI', 'Docs'].map((n) => (
+            {['API', 'Docs', 'Pricing', 'Console'].map((n) => (
               <div
                 key={n}
                 className='border-background from-muted to-muted/60 text-muted-foreground flex size-8 items-center justify-center rounded-full border-2 bg-gradient-to-br text-[9px] font-bold'
@@ -130,7 +126,7 @@ export function Features(_props: FeaturesProps) {
           </div>
           <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
             <Code className='size-3.5 text-blue-500' />
-            {t('OpenAI Compatible')}
+            OpenAI 兼容
           </div>
         </div>
       ),
@@ -140,23 +136,23 @@ export function Features(_props: FeaturesProps) {
   const additionalFeatures = [
     {
       icon: <Gauge className='size-5' strokeWidth={1.5} />,
-      title: t('High Performance'),
-      desc: t('Support for high concurrency with automatic load balancing'),
+      title: '定价透明',
+      desc: '接入前先看模型价格和计费方式，减少联调阶段的成本不确定性。',
     },
     {
       icon: <DollarSign className='size-5' strokeWidth={1.5} />,
-      title: t('Transparent Billing'),
-      desc: t('Pay-as-you-go with real-time usage monitoring'),
+      title: '任务追踪',
+      desc: '视频任务支持状态查询、删除/取消和文件下载，便于接入业务流程。',
     },
     {
       icon: <Users className='size-5' strokeWidth={1.5} />,
-      title: t('Team Collaboration'),
-      desc: t('Multi-user management with flexible permission allocation'),
+      title: '资产隔离',
+      desc: '支持不同下游账号独立创建和管理资产，降低混用风险。',
     },
     {
       icon: <HeartHandshake className='size-5' strokeWidth={1.5} />,
-      title: t('Technical Support'),
-      desc: t('Professional team providing 24/7 technical support'),
+      title: '快速接入文档',
+      desc: '从完整示例到接口清单，覆盖对话、视频、图片和资产能力。',
     },
   ]
 
@@ -165,12 +161,12 @@ export function Features(_props: FeaturesProps) {
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 max-w-lg'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('Core Features')}
+            核心能力
           </p>
           <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-3xl'>
-            {t('Built for developers,')}
+            围绕真实接入场景
             <br />
-            {t('designed for scale')}
+            而不是空泛平台叙事
           </h2>
         </AnimateInView>
 

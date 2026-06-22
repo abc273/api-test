@@ -120,6 +120,11 @@ export function useSidebarData(): SidebarData {
             icon: Users,
           },
           {
+            title: t('Portrait Asset Management'),
+            url: '/portrait-assets-admin',
+            icon: UserCheck,
+          },
+          {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,

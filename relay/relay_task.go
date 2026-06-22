@@ -531,6 +531,8 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 		return "succeeded"
 	case model.TaskStatusFailure:
 		return "failed"
+	case model.TaskStatusCancelled:
+		return "cancelled"
 	case model.TaskStatusQueued, model.TaskStatusSubmitted:
 		return "queued"
 	default:

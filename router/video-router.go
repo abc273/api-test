@@ -24,6 +24,14 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.GET("/video/generations/:task_id", controller.RelayTaskFetch)
 		videoV1Router.POST("/videos/:video_id/remix", controller.RelayTask)
 	}
+
+	videoDeleteRouter := router.Group("/v1")
+	videoDeleteRouter.Use(middleware.RouteTag("relay"))
+	videoDeleteRouter.Use(middleware.TokenOrUserAuth())
+	{
+		videoDeleteRouter.DELETE("/video/generations/:task_id", controller.RelayTaskDelete)
+		videoDeleteRouter.DELETE("/videos/:task_id", controller.RelayTaskDelete)
+	}
 	// openai compatible API video routes
 	// docs: https://platform.openai.com/docs/api-reference/videos/create
 	{

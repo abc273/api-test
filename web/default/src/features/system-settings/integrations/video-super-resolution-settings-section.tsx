@@ -291,7 +291,7 @@ export function VideoSuperResolutionSettingsSection({
                     <Input
                       type='url'
                       inputMode='url'
-                placeholder='https://operator.las.cn-beijing.volces.com'
+                      placeholder='https://operator.las.cn-beijing.volces.com'
                       autoComplete='off'
                       {...field}
                     />
@@ -415,10 +415,7 @@ export function VideoSuperResolutionSettingsSection({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Output quality mode')}</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  >
+                  <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
@@ -428,9 +425,7 @@ export function VideoSuperResolutionSettingsSection({
                       <SelectItem value='compatible'>
                         {t('Compatible')}
                       </SelectItem>
-                      <SelectItem value='balanced'>
-                        {t('Balanced')}
-                      </SelectItem>
+                      <SelectItem value='balanced'>{t('Balanced')}</SelectItem>
                       <SelectItem value='master'>{t('Master')}</SelectItem>
                     </SelectContent>
                   </Select>
@@ -549,7 +544,9 @@ export function VideoSuperResolutionSettingsSection({
                     />
                   </FormControl>
                   <FormDescription>
-                    {t('Required when generating signed URLs for private buckets.')}
+                    {t(
+                      'Required when generating signed URLs for private buckets.'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

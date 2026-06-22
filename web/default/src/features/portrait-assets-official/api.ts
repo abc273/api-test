@@ -17,15 +17,20 @@ export async function getOfficialPortraitAssetConfig(): Promise<
 export async function getOfficialPortraitAssets(params: {
   p?: number
   page_size?: number
+  external_user_id?: string
+  folder_id?: number
 }): Promise<ApiResponse<OfficialPortraitAssetPage>> {
   const res = await api.get('/api/portrait_assets/official/jobs', { params })
   return res.data
 }
 
-export async function createOfficialPortraitAssetJob(
+export async function createOfficialPortraitAssetJob(payload: {
   name: string
-): Promise<ApiResponse<OfficialPortraitAssetJob>> {
-  const res = await api.post('/api/portrait_assets/official/jobs', { name })
+  callback_url?: string
+  external_user_id?: string
+  folder_id?: number
+}): Promise<ApiResponse<OfficialPortraitAssetJob>> {
+  const res = await api.post('/api/portrait_assets/official/jobs', payload)
   return res.data
 }
 
@@ -40,7 +45,12 @@ export async function refreshOfficialPortraitValidation(
 
 export async function submitOfficialPortraitAsset(
   id: number,
-  payload: { asset_url: string; asset_type: string; name?: string }
+  payload: {
+    asset_url: string
+    asset_type: string
+    name?: string
+    folder_id?: number
+  }
 ): Promise<ApiResponse<OfficialPortraitAssetJob>> {
   const res = await api.post(
     `/api/portrait_assets/official/jobs/${id}/asset`,
@@ -62,6 +72,18 @@ export async function syncOfficialPortraitAssetJob(
   id: number
 ): Promise<ApiResponse<OfficialPortraitAssetJob>> {
   const res = await api.post(`/api/portrait_assets/official/jobs/${id}/sync`)
+  return res.data
+}
+
+export async function deleteOfficialPortraitAssetJob(
+  id: number,
+  params?: {
+    external_user_id?: string
+  }
+): Promise<ApiResponse<null>> {
+  const res = await api.delete(`/api/portrait_assets/official/jobs/${id}`, {
+    params,
+  })
   return res.data
 }
 

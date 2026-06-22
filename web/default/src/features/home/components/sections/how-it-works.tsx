@@ -1,31 +1,24 @@
 import { Settings, Zap, BarChart3 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
 export function HowItWorks() {
-  const { t } = useTranslation()
-
   const steps = [
     {
       num: '1',
-      title: t('Configure'),
-      desc: t(
-        'Add your API keys, set up channels and configure access permissions'
-      ),
+      title: '创建 API Key',
+      desc: '在控制台创建 API Key，确认你要接入的模型和工作流。',
       icon: <Settings className='size-6' strokeWidth={1.5} />,
     },
     {
       num: '2',
-      title: t('Connect'),
-      desc: t(
-        'Use our unified OpenAI-compatible endpoint in your applications'
-      ),
+      title: '调用统一接口',
+      desc: '对话走 OpenAI 兼容接口，视频、图片和资产走对应业务接口。',
       icon: <Zap className='size-6' strokeWidth={1.5} />,
     },
     {
       num: '3',
-      title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
+      title: '查询结果并管理资产',
+      desc: '在控制台查询任务状态、下载输出文件，并管理真人或虚拟资产。',
       icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
     },
   ]
@@ -35,10 +28,10 @@ export function HowItWorks() {
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('How It Works')}
+            接入流程
           </p>
           <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            {t('Three steps to get started')}
+            三步完成接入
           </h2>
         </AnimateInView>
 

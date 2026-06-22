@@ -94,6 +94,16 @@ func GetTopUpInfo(c *gin.Context) {
 	common.ApiSuccess(c, data)
 }
 
+func GetWalletSummary(c *gin.Context) {
+	userId := c.GetInt("id")
+	summary, err := model.GetUserWalletSummary(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, summary)
+}
+
 func clonePayMethods(payMethods []map[string]string) []map[string]string {
 	cloned := make([]map[string]string, 0, len(payMethods))
 	for _, method := range payMethods {

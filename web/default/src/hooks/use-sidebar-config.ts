@@ -43,6 +43,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     channel: true,
     models: true,
+    portrait_assets_admin: true,
     redemption: true,
     user: true,
     setting: true,
@@ -78,6 +79,10 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/models/metadata': { section: 'admin', module: 'models' },
   '/models/deployments': { section: 'admin', module: 'models' },
   '/users': { section: 'admin', module: 'user' },
+  '/portrait-assets-admin': {
+    section: 'admin',
+    module: 'portrait_assets_admin',
+  },
   '/redemption-codes': { section: 'admin', module: 'redemption' },
   '/subscriptions': { section: 'admin', module: 'subscription' },
 }

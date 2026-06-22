@@ -246,8 +246,7 @@ export function ModelMutateDrawer({
         name_rule: model.name_rule || 0,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
-        video_super_resolution_enabled:
-          !!model.video_super_resolution_enabled,
+        video_super_resolution_enabled: !!model.video_super_resolution_enabled,
         price: '',
         ratio: '',
         cacheRatio: '',

@@ -34,7 +34,8 @@ const defaultIntegrationSettings: IntegrationSettingsType = {
   'portrait_asset.region': 'cn-beijing',
   'portrait_asset.callback_base_url': '',
   'video_super_resolution.enabled': false,
-  'video_super_resolution.base_url': 'https://operator.las.cn-beijing.volces.com',
+  'video_super_resolution.base_url':
+    'https://operator.las.cn-beijing.volces.com',
   'video_super_resolution.api_key': '',
   'video_super_resolution.output_tos_path': '',
   'video_super_resolution.operator_id': 'las_video_super_resolution',

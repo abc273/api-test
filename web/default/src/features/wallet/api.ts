@@ -20,6 +20,7 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  WalletSummary,
 } from './types'
 
 // ============================================================================
@@ -38,6 +39,14 @@ export function isApiSuccess(response: ApiResponse): boolean {
  */
 export async function getTopupInfo(): Promise<TopupInfoResponse> {
   const res = await api.get('/api/user/topup/info')
+  return res.data
+}
+
+/**
+ * Get aggregated wallet usage summary
+ */
+export async function getWalletSummary(): Promise<ApiResponse<WalletSummary>> {
+  const res = await api.get('/api/user/wallet/summary')
   return res.data
 }
 

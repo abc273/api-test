@@ -13,7 +13,7 @@ export function NodeBadge({ className }: NodeBadgeProps) {
     <Badge
       variant='secondary'
       className={cn(
-        'border-emerald-500/20 bg-emerald-500/12 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/12 dark:text-emerald-200 h-5 rounded-full px-2 text-[10px] font-semibold whitespace-nowrap',
+        'h-5 rounded-full border-emerald-500/20 bg-emerald-500/12 px-2 text-[10px] font-semibold whitespace-nowrap text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/12 dark:text-emerald-200',
         className
       )}
     >

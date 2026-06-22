@@ -57,6 +57,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     channel: true,
     models: true,
+    portrait_assets_admin: true,
     redemption: true,
     user: true,
     setting: true,

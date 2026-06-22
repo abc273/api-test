@@ -432,6 +432,38 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
+type WalletSummary struct {
+	UsedQuota       int `json:"used_quota"`
+	RefundedQuota   int `json:"refunded_quota"`
+	ActualUsedQuota int `json:"actual_used_quota"`
+}
+
+func GetUserWalletSummary(userId int) (*WalletSummary, error) {
+	usedQuota, err := GetUserUsedQuota(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	var refundedQuota int
+	if err := LOG_DB.Model(&Log{}).
+		Where("user_id = ? AND type = ?", userId, LogTypeRefund).
+		Select("COALESCE(SUM(quota), 0)").
+		Scan(&refundedQuota).Error; err != nil {
+		return nil, err
+	}
+
+	actualUsedQuota := usedQuota - refundedQuota
+	if actualUsedQuota < 0 {
+		actualUsedQuota = 0
+	}
+
+	return &WalletSummary{
+		UsedQuota:       usedQuota,
+		RefundedQuota:   refundedQuota,
+		ActualUsedQuota: actualUsedQuota,
+	}, nil
+}
+
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota")
 

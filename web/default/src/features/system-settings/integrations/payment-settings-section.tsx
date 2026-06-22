@@ -1309,7 +1309,9 @@ export function PaymentSettingsSection({
                   </code>
                 </li>
                 <li>
-                  {t('Browser return is routed through the server and then redirected to the URLs below.')}
+                  {t(
+                    'Browser return is routed through the server and then redirected to the URLs below.'
+                  )}
                 </li>
               </ul>
             </div>
@@ -1324,7 +1326,9 @@ export function PaymentSettingsSection({
                       {t('Enable Alipay')}
                     </FormLabel>
                     <FormDescription>
-                      {t('Turn on direct Alipay payment for wallet top-ups and subscriptions')}
+                      {t(
+                        'Turn on direct Alipay payment for wallet top-ups and subscriptions'
+                      )}
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -1400,7 +1404,9 @@ export function PaymentSettingsSection({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Signing key used for Alipay requests (leave blank unless updating)')}
+                      {t(
+                        'Signing key used for Alipay requests (leave blank unless updating)'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -1423,7 +1429,9 @@ export function PaymentSettingsSection({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Public verification key from Alipay Open Platform (leave blank unless updating)')}
+                      {t(
+                        'Public verification key from Alipay Open Platform (leave blank unless updating)'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -1446,7 +1454,9 @@ export function PaymentSettingsSection({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Optional browser landing page after recharge payment')}
+                      {t(
+                        'Optional browser landing page after recharge payment'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -1467,7 +1477,9 @@ export function PaymentSettingsSection({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Optional browser landing page after subscription payment')}
+                      {t(
+                        'Optional browser landing page after subscription payment'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

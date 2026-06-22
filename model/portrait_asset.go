@@ -8,6 +8,18 @@ import (
 	"gorm.io/gorm"
 )
 
+type AdminOfficialPortraitAssetQuery struct {
+	UserID         int
+	ExternalUserID string
+	Status         string
+	FolderID       int
+	FilterFolderID bool
+	Keyword        string
+	AssetID        string
+	CreatedFrom    int64
+	CreatedTo      int64
+}
+
 const (
 	PortraitAssetSourceRPA      = "rpa"
 	PortraitAssetSourceOfficial = "official"
@@ -29,6 +41,7 @@ const (
 )
 
 const PortraitAssetQRCodeLeaseSeconds int64 = 180
+const ExternalUserIDMaxRunes = 128
 
 var (
 	ErrPortraitAssetNotReady      = errors.New("portrait asset is not ready")
@@ -40,6 +53,8 @@ var (
 type PortraitAssetJob struct {
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`
+	ExternalUserID     string         `json:"external_user_id" gorm:"type:varchar(128);index"`
+	FolderID           int            `json:"folder_id" gorm:"index"`
 	Name               string         `json:"name" gorm:"type:varchar(128)"`
 	Source             string         `json:"source" gorm:"type:varchar(32);index;default:rpa"`
 	Status             string         `json:"status" gorm:"type:varchar(32);index;default:pending"`
@@ -47,6 +62,7 @@ type PortraitAssetJob struct {
 	QRImage            string         `json:"qr_image" gorm:"type:text"`
 	ValidateToken      string         `json:"-" gorm:"type:varchar(128);index"`
 	ValidateResultCode string         `json:"validate_result_code" gorm:"type:varchar(32)"`
+	CallbackURL        string         `json:"callback_url" gorm:"type:text"`
 	VolcGroupID        string         `json:"volc_group_id" gorm:"type:varchar(128);index"`
 	AssetID            string         `json:"asset_id" gorm:"type:varchar(128);index"`
 	AssetStatus        string         `json:"asset_status" gorm:"type:varchar(64)"`
@@ -84,6 +100,18 @@ func PortraitAssetURI(assetID string) string {
 		return ""
 	}
 	return "asset://" + assetID
+}
+
+func NormalizeExternalUserID(externalUserID string) string {
+	return strings.TrimSpace(externalUserID)
+}
+
+func externalUserIDQuery(db *gorm.DB, externalUserID string) *gorm.DB {
+	externalUserID = NormalizeExternalUserID(externalUserID)
+	if externalUserID == "" {
+		return db.Where("(external_user_id = ? or external_user_id is null)", "")
+	}
+	return db.Where("external_user_id = ?", externalUserID)
 }
 
 func CreatePortraitAssetJob(userId int, name string) (*PortraitAssetJob, error) {
@@ -146,6 +174,22 @@ func GetUserPortraitAssetJobByID(userId int, id int) (*PortraitAssetJob, error) 
 }
 
 func GetReadyUserPortraitAssetJob(userId int, id int) (*PortraitAssetJob, error) {
+	return GetReadyUserPortraitAssetJobForExternalUser(userId, id, "")
+}
+
+func GetReadyUserPortraitAssetJobForExternalUser(userId int, id int, externalUserID string) (*PortraitAssetJob, error) {
+	var job PortraitAssetJob
+	err := externalUserIDQuery(DB.Where("user_id = ? and id = ? and status = ?", userId, id, PortraitAssetStatusReady), externalUserID).First(&job).Error
+	if err != nil {
+		return nil, err
+	}
+	if NormalizePortraitAssetID(job.AssetID) == "" {
+		return nil, ErrPortraitAssetNotReady
+	}
+	return &job, nil
+}
+
+func GetReadyUserPortraitAssetJobByIDIgnoringExternalUser(userId int, id int) (*PortraitAssetJob, error) {
 	var job PortraitAssetJob
 	err := DB.Where("user_id = ? and id = ? and status = ?", userId, id, PortraitAssetStatusReady).First(&job).Error
 	if err != nil {
@@ -158,6 +202,20 @@ func GetReadyUserPortraitAssetJob(userId int, id int) (*PortraitAssetJob, error)
 }
 
 func GetReadyUserPortraitAssetByAssetID(userId int, assetID string) (*PortraitAssetJob, error) {
+	return GetReadyUserPortraitAssetByAssetIDForExternalUser(userId, assetID, "")
+}
+
+func GetReadyUserPortraitAssetByAssetIDForExternalUser(userId int, assetID string, externalUserID string) (*PortraitAssetJob, error) {
+	assetID = NormalizePortraitAssetID(assetID)
+	if assetID == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var job PortraitAssetJob
+	err := externalUserIDQuery(DB.Where("user_id = ? and asset_id = ? and status = ?", userId, assetID, PortraitAssetStatusReady), externalUserID).First(&job).Error
+	return &job, err
+}
+
+func GetReadyUserPortraitAssetByAssetIDIgnoringExternalUser(userId int, assetID string) (*PortraitAssetJob, error) {
 	assetID = NormalizePortraitAssetID(assetID)
 	if assetID == "" {
 		return nil, gorm.ErrRecordNotFound
@@ -165,6 +223,41 @@ func GetReadyUserPortraitAssetByAssetID(userId int, assetID string) (*PortraitAs
 	var job PortraitAssetJob
 	err := DB.Where("user_id = ? and asset_id = ? and status = ?", userId, assetID, PortraitAssetStatusReady).First(&job).Error
 	return &job, err
+}
+
+func ValidateUserOwnedPortraitAssetByAssetID(userId int, assetID string) error {
+	return ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId, assetID, "")
+}
+
+func ValidateUserOwnedPortraitAssetByAssetIDForExternalUser(userId int, assetID string, externalUserID string) error {
+	assetID = NormalizePortraitAssetID(assetID)
+	if assetID == "" {
+		return gorm.ErrRecordNotFound
+	}
+	if _, err := GetReadyUserPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID); err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if _, err := GetActiveUserVirtualPortraitAssetByAssetIDForExternalUser(userId, assetID, externalUserID); err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if NormalizeExternalUserID(externalUserID) != "" {
+		return gorm.ErrRecordNotFound
+	}
+	if _, err := GetReadyUserPortraitAssetByAssetIDIgnoringExternalUser(userId, assetID); err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if _, err := GetActiveUserVirtualPortraitAssetByAssetIDIgnoringExternalUser(userId, assetID); err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return gorm.ErrRecordNotFound
 }
 
 func RequestUserPortraitAssetAccept(userId int, id int) (*PortraitAssetJob, error) {
@@ -375,16 +468,22 @@ func officialPortraitAssetActiveStatuses() []string {
 	}
 }
 
-func HasActiveOfficialPortraitAssetJob(userId int) (bool, error) {
+func HasActiveOfficialPortraitAssetJob(userId int, externalUserID string) (bool, error) {
 	var count int64
-	err := portraitOfficialSourceQuery(DB.Model(&PortraitAssetJob{}).
-		Where("user_id = ? and status in ?", userId, officialPortraitAssetActiveStatuses())).
+	err := externalUserIDQuery(portraitOfficialSourceQuery(DB.Model(&PortraitAssetJob{}).
+		Where("user_id = ? and status in ?", userId, officialPortraitAssetActiveStatuses())), externalUserID).
 		Count(&count).Error
 	return count > 0, err
 }
 
-func CreateOfficialPortraitAssetJob(userId int, name string, projectName string) (*PortraitAssetJob, error) {
-	active, err := HasActiveOfficialPortraitAssetJob(userId)
+func CreateOfficialPortraitAssetJob(userId int, name string, projectName string, callbackURL string, externalUserID string, folderID int) (*PortraitAssetJob, error) {
+	externalUserID = NormalizeExternalUserID(externalUserID)
+	if folderID > 0 {
+		if _, err := GetUserPortraitAssetFolderByIDForExternalUser(userId, folderID, PortraitAssetFolderKindOfficial, externalUserID, true); err != nil {
+			return nil, err
+		}
+	}
+	active, err := HasActiveOfficialPortraitAssetJob(userId, externalUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -397,33 +496,66 @@ func CreateOfficialPortraitAssetJob(userId int, name string, projectName string)
 	}
 	now := common.GetTimestamp()
 	job := &PortraitAssetJob{
-		UserId:      userId,
-		Name:        name,
-		Source:      PortraitAssetSourceOfficial,
-		Status:      PortraitAssetStatusPending,
-		ProjectName: strings.TrimSpace(projectName),
-		CreatedTime: now,
-		UpdatedTime: now,
+		UserId:         userId,
+		ExternalUserID: externalUserID,
+		FolderID:       folderID,
+		Name:           name,
+		Source:         PortraitAssetSourceOfficial,
+		Status:         PortraitAssetStatusPending,
+		ProjectName:    strings.TrimSpace(projectName),
+		CallbackURL:    strings.TrimSpace(callbackURL),
+		CreatedTime:    now,
+		UpdatedTime:    now,
 	}
 	return job, DB.Create(job).Error
 }
 
-func GetUserOfficialPortraitAssetJobs(userId int, startIdx int, num int) ([]*PortraitAssetJob, error) {
+func GetUserOfficialPortraitAssetJobs(userId int, externalUserID string, startIdx int, num int) ([]*PortraitAssetJob, error) {
+	return GetUserOfficialPortraitAssetJobsWithFolder(userId, externalUserID, 0, false, startIdx, num)
+}
+
+func GetUserOfficialPortraitAssetJobsWithFolder(userId int, externalUserID string, folderID int, filterFolderID bool, startIdx int, num int) ([]*PortraitAssetJob, error) {
 	var jobs []*PortraitAssetJob
-	err := portraitOfficialSourceQuery(DB.Where("user_id = ?", userId)).
+	query := portraitOfficialSourceQuery(DB.Where("user_id = ?", userId))
+	if NormalizeExternalUserID(externalUserID) != "" {
+		query = externalUserIDQuery(query, externalUserID)
+	}
+	if filterFolderID {
+		query = portraitAssetFolderIDQuery(query, folderID)
+	}
+	err := query.
 		Order("id desc").Limit(num).Offset(startIdx).Find(&jobs).Error
 	return jobs, err
 }
 
-func CountUserOfficialPortraitAssetJobs(userId int) (int64, error) {
+func CountUserOfficialPortraitAssetJobs(userId int, externalUserID string) (int64, error) {
+	return CountUserOfficialPortraitAssetJobsWithFolder(userId, externalUserID, 0, false)
+}
+
+func CountUserOfficialPortraitAssetJobsWithFolder(userId int, externalUserID string, folderID int, filterFolderID bool) (int64, error) {
 	var count int64
-	err := portraitOfficialSourceQuery(DB.Model(&PortraitAssetJob{}).Where("user_id = ?", userId)).Count(&count).Error
+	query := portraitOfficialSourceQuery(DB.Model(&PortraitAssetJob{}).Where("user_id = ?", userId))
+	if NormalizeExternalUserID(externalUserID) != "" {
+		query = externalUserIDQuery(query, externalUserID)
+	}
+	if filterFolderID {
+		query = portraitAssetFolderIDQuery(query, folderID)
+	}
+	err := query.Count(&count).Error
 	return count, err
 }
 
 func GetUserOfficialPortraitAssetJobByID(userId int, id int) (*PortraitAssetJob, error) {
+	return GetUserOfficialPortraitAssetJobByIDForExternalUser(userId, id, "", false)
+}
+
+func GetUserOfficialPortraitAssetJobByIDForExternalUser(userId int, id int, externalUserID string, filterExternalUserID bool) (*PortraitAssetJob, error) {
 	var job PortraitAssetJob
-	err := portraitOfficialSourceQuery(DB.Where("user_id = ? and id = ?", userId, id)).First(&job).Error
+	query := portraitOfficialSourceQuery(DB.Where("user_id = ? and id = ?", userId, id))
+	if filterExternalUserID {
+		query = externalUserIDQuery(query, externalUserID)
+	}
+	err := query.First(&job).Error
 	return &job, err
 }
 
@@ -431,6 +563,66 @@ func GetOfficialPortraitAssetJobByID(id int) (*PortraitAssetJob, error) {
 	var job PortraitAssetJob
 	err := portraitOfficialSourceQuery(DB.Where("id = ?", id)).First(&job).Error
 	return &job, err
+}
+
+func DeleteUserOfficialPortraitAssetJobForExternalUser(userId int, id int, externalUserID string, filterExternalUserID bool) error {
+	job, err := GetUserOfficialPortraitAssetJobByIDForExternalUser(userId, id, externalUserID, filterExternalUserID)
+	if err != nil {
+		return err
+	}
+	return DB.Delete(job).Error
+}
+
+func GetAdminOfficialPortraitAssetJobs(queryParams AdminOfficialPortraitAssetQuery, startIdx int, num int) ([]*PortraitAssetJob, error) {
+	var jobs []*PortraitAssetJob
+	query := buildAdminOfficialPortraitAssetQuery(queryParams)
+	err := query.Order("id desc").Limit(num).Offset(startIdx).Find(&jobs).Error
+	return jobs, err
+}
+
+func CountAdminOfficialPortraitAssetJobs(queryParams AdminOfficialPortraitAssetQuery) (int64, error) {
+	var count int64
+	query := buildAdminOfficialPortraitAssetQuery(queryParams).Model(&PortraitAssetJob{})
+	err := query.Count(&count).Error
+	return count, err
+}
+
+func DeleteOfficialPortraitAssetJobByID(id int) error {
+	job, err := GetOfficialPortraitAssetJobByID(id)
+	if err != nil {
+		return err
+	}
+	return DB.Delete(job).Error
+}
+
+func buildAdminOfficialPortraitAssetQuery(queryParams AdminOfficialPortraitAssetQuery) *gorm.DB {
+	query := portraitOfficialSourceQuery(DB)
+	if queryParams.UserID > 0 {
+		query = query.Where("user_id = ?", queryParams.UserID)
+	}
+	if NormalizeExternalUserID(queryParams.ExternalUserID) != "" {
+		query = externalUserIDQuery(query, queryParams.ExternalUserID)
+	}
+	if status := strings.TrimSpace(queryParams.Status); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if queryParams.FilterFolderID {
+		query = portraitAssetFolderIDQuery(query, queryParams.FolderID)
+	}
+	if assetID := NormalizePortraitAssetID(queryParams.AssetID); assetID != "" {
+		query = query.Where("asset_id = ?", assetID)
+	}
+	if keyword := strings.TrimSpace(queryParams.Keyword); keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("name LIKE ? OR asset_id LIKE ? OR volc_group_id LIKE ?", like, like, like)
+	}
+	if queryParams.CreatedFrom > 0 {
+		query = query.Where("created_time >= ?", queryParams.CreatedFrom)
+	}
+	if queryParams.CreatedTo > 0 {
+		query = query.Where("created_time <= ?", queryParams.CreatedTo)
+	}
+	return query
 }
 
 func SetOfficialPortraitValidateSession(job *PortraitAssetJob, bytedToken string, h5Link string) error {
@@ -489,11 +681,12 @@ func SetOfficialPortraitAssetGroup(job *PortraitAssetJob, groupID string) error 
 	return DB.Save(job).Error
 }
 
-func SetOfficialPortraitAssetUpload(job *PortraitAssetJob, assetID string, assetURL string, assetType string) error {
+func SetOfficialPortraitAssetUpload(job *PortraitAssetJob, assetID string, assetURL string, assetType string, folderID int) error {
 	if job == nil {
 		return errors.New("portrait asset job is nil")
 	}
 	job.Source = PortraitAssetSourceOfficial
+	job.FolderID = folderID
 	job.AssetID = NormalizePortraitAssetID(assetID)
 	job.AssetURL = strings.TrimSpace(assetURL)
 	job.AssetType = strings.TrimSpace(assetType)

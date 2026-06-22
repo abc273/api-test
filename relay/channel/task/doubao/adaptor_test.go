@@ -2,9 +2,12 @@ package doubao
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -330,4 +333,358 @@ func TestConvertToOpenAIVideoHidesDedicatedSuperResolutionMetadata(t *testing.T)
 	require.Equal(t, "https://example.com/final.mp4", video.Metadata["url"])
 	_, hasSuperResolution := video.Metadata["super_resolution"]
 	require.False(t, hasSuperResolution)
+}
+
+func TestParseTaskResultMapsCancelledStatus(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	body := []byte(`{
+		"id": "cgt-test-cancelled",
+		"model": "doubao-seedance-2-0-fast-260128",
+		"status": "cancelled",
+		"content": {
+			"video_url": ""
+		}
+	}`)
+
+	result, err := adaptor.ParseTaskResult(body)
+	require.NoError(t, err)
+	require.Equal(t, model.TaskStatusCancelled, result.Status)
+	require.Equal(t, "100%", result.Progress)
+}
+
+func TestDeleteTaskUsesDoubaoDeleteEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	service.InitHttpClient()
+
+	var (
+		gotMethod string
+		gotPath   string
+		gotAuth   string
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodDelete, "/v1/video/generations/task_public_1", nil)
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl: server.URL,
+			ApiKey:         "sk-test-delete",
+		},
+	}
+	adaptor.Init(info)
+
+	task := &model.Task{
+		TaskID: "task_public_1",
+		PrivateData: model.TaskPrivateData{
+			UpstreamTaskID: "cgt-delete-me",
+		},
+	}
+
+	taskErr := adaptor.DeleteTask(ctx, info, task)
+	require.Nil(t, taskErr)
+	require.Equal(t, http.MethodDelete, gotMethod)
+	require.Equal(t, "/api/v3/contents/generations/tasks/cgt-delete-me", gotPath)
+	require.Equal(t, "Bearer sk-test-delete", gotAuth)
+}
+
+func TestConvertToRequestPayloadScopesPortraitAssetReferencesByExternalUserID(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.VirtualPortraitAsset{
+		UserId:         42,
+		ExternalUserID: "customer-user-a",
+		Name:           "virtual-a",
+		VolcAssetID:    "asset-virtual-a",
+		Status:         model.VirtualPortraitAssetStatusActive,
+		CreatedTime:    1,
+		UpdatedTime:    1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:          "doubao-seedance-2-0-fast-260128",
+		Prompt:         "make a video",
+		ExternalUserID: "customer-user-a",
+		Metadata: map[string]any{
+			"external_user_id": "customer-user-b",
+			"content": []map[string]any{
+				{
+					"type": "image_url",
+					"role": "reference_image",
+					"image_url": map[string]any{
+						"url": "asset://asset-virtual-a",
+					},
+				},
+			},
+		},
+	}
+	_, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+
+	req.ExternalUserID = ""
+	_, err = adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.Error(t, err)
+
+	req.Metadata["external_user_id"] = "customer-user-a"
+	_, err = adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+}
+
+func TestConvertToRequestPayloadAppendsTopLevelImagesAfterMetadataContent(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.VirtualPortraitAsset{
+		UserId:      42,
+		Name:        "virtual-a",
+		VolcAssetID: "asset-virtual-a",
+		Status:      model.VirtualPortraitAssetStatusActive,
+		CreatedTime: 1,
+		UpdatedTime: 1,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.PortraitAssetJob{
+		UserId:      42,
+		Name:        "official-image",
+		Source:      model.PortraitAssetSourceOfficial,
+		Status:      model.PortraitAssetStatusReady,
+		AssetID:     "asset-official-image-a",
+		AssetType:   "Image",
+		CreatedTime: 1,
+		UpdatedTime: 1,
+		ReadyTime:   1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:  "doubao-seedance-2-0-fast-260128",
+		Prompt: "make a video",
+		Images: []string{"data:image/jpeg;base64,cat-image"},
+		Metadata: map[string]any{
+			"content": []map[string]any{
+				{
+					"type": "image_url",
+					"role": "reference_image",
+					"image_url": map[string]any{
+						"url": "asset://asset-virtual-a",
+					},
+				},
+				{
+					"type": "image_url",
+					"role": "reference_image",
+					"image_url": map[string]any{
+						"url": "asset://asset-official-image-a",
+					},
+				},
+			},
+		},
+	}
+
+	payload, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+	require.Len(t, payload.Content, 4)
+	require.Equal(t, "asset://asset-virtual-a", payload.Content[0].ImageURL.URL)
+	require.Equal(t, "asset://asset-official-image-a", payload.Content[1].ImageURL.URL)
+	require.Equal(t, "data:image/jpeg;base64,cat-image", payload.Content[2].ImageURL.URL)
+	require.Equal(t, "text", payload.Content[3].Type)
+}
+
+func TestConvertToRequestPayloadMapsOfficialPortraitAssetByAssetType(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.PortraitAssetJob{
+		UserId:         42,
+		ExternalUserID: "customer-user-a",
+		Name:           "official-video",
+		Source:         model.PortraitAssetSourceOfficial,
+		Status:         model.PortraitAssetStatusReady,
+		AssetID:        "asset-official-video-a",
+		AssetType:      "Video",
+		CreatedTime:    1,
+		UpdatedTime:    1,
+		ReadyTime:      1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:          "doubao-seedance-2-0-fast-260128",
+		Prompt:         "make a video",
+		ExternalUserID: "customer-user-a",
+		Images:         []string{"https://example.com/ref.png"},
+		Metadata: map[string]any{
+			"asset_id": "asset://asset-official-video-a",
+		},
+	}
+
+	payload, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+	require.Len(t, payload.Content, 3)
+
+	require.Equal(t, "image_url", payload.Content[0].Type)
+	require.Equal(t, "reference_image", payload.Content[0].Role)
+	require.NotNil(t, payload.Content[0].ImageURL)
+	require.Equal(t, "https://example.com/ref.png", payload.Content[0].ImageURL.URL)
+
+	require.Equal(t, "video_url", payload.Content[1].Type)
+	require.Equal(t, "reference_video", payload.Content[1].Role)
+	require.NotNil(t, payload.Content[1].VideoURL)
+	require.Equal(t, "asset://asset-official-video-a", payload.Content[1].VideoURL.URL)
+
+	require.Equal(t, "text", payload.Content[2].Type)
+	require.Equal(t, "make a video", payload.Content[2].Text)
+}
+
+func TestConvertToRequestPayloadMapsOfficialPortraitAssetJobIDByAssetType(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.PortraitAssetJob{
+		Id:             7,
+		UserId:         42,
+		ExternalUserID: "customer-user-a",
+		Name:           "official-audio",
+		Source:         model.PortraitAssetSourceOfficial,
+		Status:         model.PortraitAssetStatusReady,
+		AssetID:        "asset-official-audio-a",
+		AssetType:      "Audio",
+		CreatedTime:    1,
+		UpdatedTime:    1,
+		ReadyTime:      1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:          "doubao-seedance-2-0-fast-260128",
+		Prompt:         "make a video",
+		ExternalUserID: "customer-user-a",
+		Metadata: map[string]any{
+			"portrait_asset_id": 7,
+		},
+	}
+
+	payload, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+	require.Len(t, payload.Content, 2)
+
+	require.Equal(t, "audio_url", payload.Content[0].Type)
+	require.Empty(t, payload.Content[0].Role)
+	require.NotNil(t, payload.Content[0].AudioURL)
+	require.Equal(t, "asset://asset-official-audio-a", payload.Content[0].AudioURL.URL)
+
+	require.Equal(t, "text", payload.Content[1].Type)
+	require.Equal(t, "make a video", payload.Content[1].Text)
+}
+
+func TestConvertToRequestPayloadMapsOfficialPortraitAssetByAssetTypeWithoutExternalUserID(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.PortraitAssetJob{
+		Id:             18,
+		UserId:         42,
+		ExternalUserID: "customer-user-a",
+		Name:           "official-image",
+		Source:         model.PortraitAssetSourceOfficial,
+		Status:         model.PortraitAssetStatusReady,
+		AssetID:        "asset-official-image-a",
+		AssetType:      "Image",
+		CreatedTime:    1,
+		UpdatedTime:    1,
+		ReadyTime:      1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:  "doubao-seedance-2-0-fast-260128",
+		Prompt: "make a video",
+		Metadata: map[string]any{
+			"asset_id": "asset://asset-official-image-a",
+		},
+	}
+
+	payload, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+	require.Len(t, payload.Content, 2)
+	require.Equal(t, "image_url", payload.Content[0].Type)
+	require.Equal(t, "reference_image", payload.Content[0].Role)
+	require.NotNil(t, payload.Content[0].ImageURL)
+	require.Equal(t, "asset://asset-official-image-a", payload.Content[0].ImageURL.URL)
+	require.Equal(t, "text", payload.Content[1].Type)
+}
+
+func TestConvertToRequestPayloadMapsOfficialPortraitAssetJobIDWithoutExternalUserID(t *testing.T) {
+	setupDoubaoPortraitAssetTestDB(t)
+	require.NoError(t, model.DB.Create(&model.PortraitAssetJob{
+		Id:             19,
+		UserId:         42,
+		ExternalUserID: "customer-user-a",
+		Name:           "official-image-by-job",
+		Source:         model.PortraitAssetSourceOfficial,
+		Status:         model.PortraitAssetStatusReady,
+		AssetID:        "asset-official-image-b",
+		AssetType:      "Image",
+		CreatedTime:    1,
+		UpdatedTime:    1,
+		ReadyTime:      1,
+	}).Error)
+
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:  "doubao-seedance-2-0-fast-260128",
+		Prompt: "make a video",
+		Metadata: map[string]any{
+			"portrait_asset_id": 19,
+		},
+	}
+
+	payload, err := adaptor.convertToRequestPayload(&req, &relaycommon.RelayInfo{UserId: 42})
+	require.NoError(t, err)
+	require.Len(t, payload.Content, 2)
+	require.Equal(t, "image_url", payload.Content[0].Type)
+	require.Equal(t, "reference_image", payload.Content[0].Role)
+	require.NotNil(t, payload.Content[0].ImageURL)
+	require.Equal(t, "asset://asset-official-image-b", payload.Content[0].ImageURL.URL)
+	require.Equal(t, "text", payload.Content[1].Type)
+}
+
+func setupDoubaoPortraitAssetTestDB(t *testing.T) {
+	originalDB := model.DB
+	originalLogDB := model.LOG_DB
+	originalIsMasterNode := common.IsMasterNode
+	originalSQLitePath := common.SQLitePath
+	originalUsingSQLite := common.UsingSQLite
+	originalUsingMySQL := common.UsingMySQL
+	originalUsingPostgreSQL := common.UsingPostgreSQL
+	originalDSN := os.Getenv("SQL_DSN")
+	testDB := model.DB
+	t.Cleanup(func() {
+		model.DB = originalDB
+		model.LOG_DB = originalLogDB
+		common.IsMasterNode = originalIsMasterNode
+		common.SQLitePath = originalSQLitePath
+		common.UsingSQLite = originalUsingSQLite
+		common.UsingMySQL = originalUsingMySQL
+		common.UsingPostgreSQL = originalUsingPostgreSQL
+		if testDB != nil {
+			sqlDB, err := testDB.DB()
+			if err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		if originalDSN == "" {
+			require.NoError(t, os.Unsetenv("SQL_DSN"))
+		} else {
+			require.NoError(t, os.Setenv("SQL_DSN", originalDSN))
+		}
+	})
+
+	common.IsMasterNode = false
+	common.SQLitePath = fmt.Sprintf("file:%s_doubao_portrait_asset?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	common.UsingSQLite = false
+	common.UsingMySQL = false
+	common.UsingPostgreSQL = false
+	require.NoError(t, os.Setenv("SQL_DSN", "local"))
+	require.NoError(t, model.InitDB())
+	testDB = model.DB
+	require.NoError(t, model.DB.AutoMigrate(&model.PortraitAssetJob{}, &model.VirtualPortraitAsset{}))
 }

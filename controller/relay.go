@@ -476,6 +476,15 @@ func RelayTaskFetch(c *gin.Context) {
 	}
 }
 
+func RelayTaskDelete(c *gin.Context) {
+	result, taskErr := relay.RelayTaskDelete(c)
+	if taskErr != nil {
+		respondTaskError(c, taskErr)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func RelayTask(c *gin.Context) {
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {

@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { AnimateInView } from '@/components/animate-in-view'
 
@@ -10,8 +9,6 @@ interface CTAProps {
 }
 
 export function CTA(props: CTAProps) {
-  const { t } = useTranslation()
-
   if (props.isAuthenticated) {
     return null
   }
@@ -35,19 +32,19 @@ export function CTA(props: CTAProps) {
         animation='scale-in'
       >
         <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'>
-          {t('Ready to simplify')}
+          准备开始接入？
           <br />
           <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-            {t('your AI integration?')}
+            先看文档，再创建密钥
           </span>
         </h2>
         <p className='text-muted-foreground/80 mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'>
-          {t('Start for free with generous limits. No credit card required.')}
+          先确认文档和定价，再按你的业务选择对话、视频、图片或资产工作流。
         </p>
         <div className='mt-8 flex items-center justify-center gap-3'>
           <Button className='group rounded-lg' asChild>
             <Link to='/sign-up'>
-              {t('Get Started')}
+              创建账号
               <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
             </Link>
           </Button>
@@ -56,7 +53,7 @@ export function CTA(props: CTAProps) {
             className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
             asChild
           >
-            <Link to='/pricing'>{t('View Pricing')}</Link>
+            <Link to='/docs'>查看接口文档</Link>
           </Button>
         </div>
       </AnimateInView>

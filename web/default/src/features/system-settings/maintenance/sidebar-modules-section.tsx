@@ -126,6 +126,10 @@ export function SidebarModulesSection({
         title: t('Users'),
         description: t('Administer user accounts and roles.'),
       },
+      portrait_assets_admin: {
+        title: t('Portrait Asset Management'),
+        description: t('Review and manage official and virtual portrait assets across all accounts.'),
+      },
       setting: {
         title: t('System settings'),
         description: t('Advanced platform configuration.'),

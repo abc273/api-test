@@ -91,12 +91,11 @@
     border-radius: 1.6rem 1.6rem 0 0;
     border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
     border-bottom: none;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--card) 94%, transparent),
-        color-mix(in oklch, var(--card) 86%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 94%, transparent),
+      color-mix(in oklch, var(--card) 86%, transparent)
+    );
     padding: 1rem 1rem 0.95rem;
     box-shadow: 0 22px 70px rgb(0 0 0 / 0.12);
     backdrop-filter: blur(14px);
@@ -107,12 +106,11 @@
     overflow-y: auto;
     border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
     border-radius: 0 0 1.6rem 1.6rem;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--card) 92%, transparent),
-        color-mix(in oklch, var(--card) 84%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 92%, transparent),
+      color-mix(in oklch, var(--card) 84%, transparent)
+    );
     padding: 0.6rem;
     box-shadow: 0 22px 70px rgb(0 0 0 / 0.12);
     backdrop-filter: blur(14px);
@@ -329,12 +327,11 @@
     overflow-x: auto;
     border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
     border-radius: 1.15rem;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--muted) 62%, transparent),
-        color-mix(in oklch, var(--muted) 46%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--muted) 62%, transparent),
+      color-mix(in oklch, var(--muted) 46%, transparent)
+    );
     padding: 1rem 1.1rem;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
   }
@@ -379,12 +376,11 @@
     margin-block: 1.1rem 1.45rem;
     border: 1px solid color-mix(in oklch, var(--primary) 16%, transparent);
     border-radius: 1rem;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--primary) 7%, transparent),
-        color-mix(in oklch, var(--muted) 34%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--primary) 7%, transparent),
+      color-mix(in oklch, var(--muted) 34%, transparent)
+    );
     padding: 0.85rem 0.95rem;
   }
 
@@ -410,12 +406,11 @@
     -webkit-overflow-scrolling: touch;
     border: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
     border-radius: 1.15rem;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--card) 94%, transparent),
-        color-mix(in oklch, var(--card) 88%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 94%, transparent),
+      color-mix(in oklch, var(--card) 88%, transparent)
+    );
     box-shadow:
       0 16px 40px rgb(0 0 0 / 0.05),
       inset 0 1px 0 rgb(255 255 255 / 0.02);
@@ -434,12 +429,11 @@
   }
 
   .docs-table thead {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--muted) 72%, transparent),
-        color-mix(in oklch, var(--muted) 58%, transparent)
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--muted) 72%, transparent),
+      color-mix(in oklch, var(--muted) 58%, transparent)
+    );
   }
 
   .docs-table-head {

@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { Button } from '@/components/ui/button'
 import { HeroTerminalDemo } from '../hero-terminal-demo'
@@ -11,7 +10,6 @@ interface HeroProps {
 }
 
 export function Hero(props: HeroProps) {
-  const { t } = useTranslation()
   const { systemName } = useSystemConfig()
 
   return (
@@ -39,20 +37,18 @@ export function Hero(props: HeroProps) {
           className='landing-animate-fade-up text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'
           style={{ animationDelay: '0ms' }}
         >
-          {t('Unified API Gateway for')}
+          统一 API 接入
           <br />
           <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-            {t('All Your AI Models')}
+            对话、视频、图片与资产工作流
           </span>
         </h1>
         <p
           className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-lg text-base leading-relaxed opacity-0 md:text-lg'
           style={{ animationDelay: '80ms' }}
         >
-          {systemName}{' '}
-          {t(
-            'aggregates 50+ AI providers behind one unified API. Manage access, track costs, and scale effortlessly.'
-          )}
+          {systemName}
+          提供 OpenAI 兼容对话接口、视频与图片生成能力，以及真人/虚拟资产工作流，接入、管理和交付都放在一个控制台里。
         </p>
         <div
           className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
@@ -61,7 +57,7 @@ export function Hero(props: HeroProps) {
           {props.isAuthenticated ? (
             <Button className='group rounded-lg' asChild>
               <Link to='/dashboard'>
-                {t('Go to Dashboard')}
+                进入控制台
                 <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
               </Link>
             </Button>
@@ -69,7 +65,7 @@ export function Hero(props: HeroProps) {
             <>
               <Button className='group rounded-lg' asChild>
                 <Link to='/sign-up'>
-                  {t('Get Started')}
+                  立即接入
                   <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
                 </Link>
               </Button>
@@ -78,7 +74,7 @@ export function Hero(props: HeroProps) {
                 className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
                 asChild
               >
-                <Link to='/pricing'>{t('View Pricing')}</Link>
+                <Link to='/docs'>查看文档</Link>
               </Button>
             </>
           )}

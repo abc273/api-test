@@ -40,6 +40,23 @@ func VideoGenerations(c *gin.Context) {
 func VideoGenerationsTaskId(c *gin.Context) {
 }
 
+// VideoGenerationsDelete
+// @Summary 取消或删除视频任务
+// @Description 取消排队中的视频任务，或删除已结束的视频任务记录
+// @Tags Video
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param task_id path string true "Task ID"
+// @Failure 400 {object} dto.OpenAIError "请求参数错误"
+// @Failure 401 {object} dto.OpenAIError "未授权"
+// @Failure 403 {object} dto.OpenAIError "无权限"
+// @Failure 404 {object} dto.OpenAIError "任务不存在"
+// @Failure 500 {object} dto.OpenAIError "服务器内部错误"
+// @Router /v1/video/generations/{task_id} [delete]
+func VideoGenerationsDelete(c *gin.Context) {
+}
+
 // KlingText2VideoGenerations
 // @Summary 可灵文生视频
 // @Description 调用可灵AI文生视频接口，生成视频内容

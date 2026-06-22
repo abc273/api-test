@@ -37,12 +37,15 @@ func TestMain(m *testing.M) {
 		&Task{},
 		&User{},
 		&Token{},
+		&Option{},
 		&Log{},
 		&Channel{},
 		&TopUp{},
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
+		&ApiDocRevision{},
+		&ApiDocChangeItem{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -56,12 +59,15 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM tasks")
 		DB.Exec("DELETE FROM users")
 		DB.Exec("DELETE FROM tokens")
+		DB.Exec("DELETE FROM options")
 		DB.Exec("DELETE FROM logs")
 		DB.Exec("DELETE FROM channels")
 		DB.Exec("DELETE FROM top_ups")
 		DB.Exec("DELETE FROM subscription_orders")
 		DB.Exec("DELETE FROM subscription_plans")
 		DB.Exec("DELETE FROM user_subscriptions")
+		DB.Exec("DELETE FROM api_doc_revisions")
+		DB.Exec("DELETE FROM api_doc_change_items")
 	})
 }
 

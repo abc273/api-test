@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { NodeBadge } from '@/components/layout/components/node-badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NodeBadge } from '@/components/layout/components/node-badge'
 
 type AuthLayoutProps = {
   children: React.ReactNode
